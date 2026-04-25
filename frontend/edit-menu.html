@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Edit Menu Item - Admin Dashboard</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <header>
+    <a href="admin.html" class="logo"><i class="fa-solid fa-utensils"></i> Admin Dashboard</a>
+    <nav>
+      <a href="admin.html">Back to Admin</a>
+    </nav>
+  </header>
+
+  <div class="container">
+    <div class="glass-panel" style="max-width: 600px; margin: 2rem auto; padding: 2rem;">
+      <h2 style="margin-bottom: 2rem; text-align: center;">Edit Menu Item</h2>
+
+      <form id="edit-item-form">
+        <div class="form-group">
+          <label for="item-name">Name</label>
+          <input type="text" id="item-name" required>
+        </div>
+
+        <div class="form-group">
+          <label for="item-price">Price (₹)</label>
+          <input type="number" id="item-price" step="0.01" required>
+        </div>
+
+        <div class="form-group">
+          <label for="item-image">Image URL</label>
+          <input type="url" id="item-image" required placeholder="https://example.com/image.jpg">
+        </div>
+
+        <div class="form-group">
+          <label for="item-available">Available</label>
+          <select id="item-available">
+            <option value="1">Yes</option>
+            <option value="0">No</option>
+          </select>
+        </div>
+
+        <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+          <button type="submit" class="btn btn-primary" style="flex: 1;">Update Item</button>
+          <button type="button" id="delete-btn" class="btn btn-danger" style="flex: 1;">Delete Item</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = 'http://localhost:3000/api';
+    const token = localStorage.getItem('token');
+    const user = JSON.parse(localStorage.getItem('user') || 'null');
+
+    if (!token || !user || user.role !== 'admin') {
+      window.location.href = 'login.html';
+    }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const itemId = urlParams.get('id');
+
+    if (!itemId) {
+      alert('No item ID provided');
+      window.location.href = 'admin.html';
+    }
+
+    // Fetch item details
+    async function fetchItem() {
+      try {
+        const res = await fetch(`${API_URL}/items`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const items = await res.json();
+        const item = items.find(i => i.id == itemId);
+
+        if (!item) {
+          alert('Item not found');
+          window.location.href = 'admin.html';
+          return;
+        }
+
+        document.getElementById('item-name').value = item.name;
+        document.getElementById('item-price').value = item.price;
+        document.getElementById('item-image').value = item.image;
+        document.getElementById('item-available').value = item.available ? '1' : '0';
+      } catch (err) {
+        console.error(err);
+        alert('Error loading item details');
+      }
+    }
+
+    // Update item
+    document.getElementById('edit-item-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const name = document.getElementById('item-name').value;
+      const price = parseFloat(document.getElementById('item-price').value);
+      const image = document.getElementById('item-image').value;
+      const available = document.getElementById('item-available').value === '1';
+
+      try {
+        const res = await fetch(`${API_URL}/items/${itemId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ name, price, image, available })
+        });
+
+        if (res.ok) {
+          alert('Item updated successfully!');
+          window.location.href = 'admin.html';
+        } else {
+          alert('Error updating item');
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Error updating item');
+      }
+    });
+
+    // Delete item
+    document.getElementById('delete-btn').addEventListener('click', async () => {
+      if (!confirm('Are you sure you want to delete this item?')) return;
+
+      try {
+        const res = await fetch(`${API_URL}/items/${itemId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (res.ok) {
+          alert('Item deleted successfully!');
+          window.location.href = 'admin.html';
+        } else {
+          alert('Error deleting item');
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Error deleting item');
+      }
+    });
+
+    fetchItem();
+  </script>
+</body>
+</html>

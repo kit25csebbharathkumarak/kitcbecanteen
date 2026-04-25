@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Menu - Canteen Express</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+  <header>
+    <a href="index.html" class="logo"><i class="fa-solid fa-utensils"></i> Canteen Express</a>
+    <nav>
+      <a href="menu.html" class="active">Menu</a>
+      <a href="admin.html">Admin</a>
+    </nav>
+  </header>
+
+  <div class="container menu-layout">
+    <main>
+      <h2>Today's Menu</h2>
+      <p style="color: var(--text-muted); margin-bottom: 2rem;">Freshly prepared for you.</p>
+      <div class="items-grid" id="menu-grid">
+        <!-- Items injected by JS -->
+      </div>
+    </main>
+
+    <aside>
+      <div class="cart-panel glass-panel">
+        <h3 class="cart-header"><i class="fa-solid fa-basket-shopping"></i> Your Cart</h3>
+        <div class="cart-items" id="cart-items">
+          <p style="color: var(--text-muted); text-align: center; margin-top: 2rem;">Cart is empty</p>
+        </div>
+        <div class="cart-footer">
+          <div class="cart-total">
+            <span>Total</span>
+            <span id="cart-total">₹0</span>
+          </div>
+          <button class="btn btn-primary btn-add" id="checkout-btn" disabled>Proceed to Pay</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="modal" id="qr-modal">
+    <div class="modal-content">
+      <span class="close-btn" id="close-modal">&times;</span>
+      <h3>Order Successful!</h3>
+      <p>Show this QR Code at the counter.</p>
+      <div id="qrcode"></div>
+      <p style="font-family: monospace; font-weight: bold; color: var(--primary-color)" id="order-id-display"></p>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

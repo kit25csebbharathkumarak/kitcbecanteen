@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Orders - Canteen Express</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+  <header>
+    <a href="index.html" class="logo"><i class="fa-solid fa-utensils"></i> Canteen Express</a>
+    <nav>
+      <a href="menu.html">Menu</a>
+      <a href="orders.html" class="active">My Orders</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <h2 style="margin-bottom: 1rem;">My Order History</h2>
+    <p style="color: var(--text-muted); margin-bottom: 2rem;">Track your recent orders here. Click "View QR Code" to show your order code at the counter.</p>
+    
+    <div class="orders-board" id="user-orders-board">
+      <!-- Injected by JS -->
+    </div>
+  </main>
+
+  <!-- QR Code Modal -->
+  <div class="modal" id="qr-modal">
+    <div class="modal-content">
+      <span class="close-btn" id="close-modal">&times;</span>
+      <h3>Your Order QR</h3>
+      <p>Show this to the admin to collect your food.</p>
+      <div id="qrcode"></div>
+      <p style="font-family: monospace; font-weight: bold; color: var(--primary-color)" id="order-id-display"></p>
+    </div>
+  </div>
+
+  <script src="js/orders.js"></script>
+</body>
+</html>
