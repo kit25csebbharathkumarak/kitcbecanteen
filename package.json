@@ -6,7 +6,11 @@
   "scripts": {
     "start": "node backend/server.js",
     "dev": "node backend/server.js",
+    "postinstall": "npm rebuild sqlite3 --build-from-source",
     "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "engines": {
+    "node": "18.x"
   },
   "keywords": [],
   "author": "",

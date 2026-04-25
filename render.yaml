@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: canteen-express
+    env: node
+    plan: free
+    region: singapore
+    buildCommand: npm install --build-from-source=sqlite3
+    startCommand: npm start
