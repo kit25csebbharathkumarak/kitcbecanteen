@@ -1,58 +1,24 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Canteen Express - Skip the Queue</title>
-  <link rel="stylesheet" href="css/styles.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <meta charset="UTF-8">
+    <title>Canteen Express</title>
+    <script>
+        const token = localStorage.getItem('token');
+        const user = JSON.parse(localStorage.getItem('user') || 'null');
+        
+        if (token && user) {
+            if (user.role === 'admin') {
+                window.location.href = 'admin.html';
+            } else {
+                window.location.href = 'menu.html';
+            }
+        } else {
+            window.location.href = 'login.html';
+        }
+    </script>
 </head>
 <body>
-  <header>
-    <a href="index.html" class="logo"><i class="fa-solid fa-utensils"></i> Canteen Express</a>
-    <nav>
-      <a href="admin.html">Admin Portal</a>
-    </nav>
-  </header>
-
-  <main class="hero">
-    <div class="hero-content glass-panel" style="padding: 4rem; text-align: center;">
-      <h1>Skip the Queue. Pre-Order Now.</h1>
-      <p>Order your favorite canteen food from your phone, pay instantly, and pick it up with a simple QR code scan. No more waiting during lunch breaks!</p>
-      <div class="hero-actions">
-        <a href="menu.html" class="btn btn-primary"><i class="fa-solid fa-burger"></i> View Menu & Order</a>
-      </div>
-    </div>
-  </main>
-
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const token = localStorage.getItem('token');
-      const user = JSON.parse(localStorage.getItem('user') || 'null');
-      const nav = document.querySelector('nav');
-      if (token && user) {
-        const ordersBtn = document.createElement('a');
-        ordersBtn.href = 'orders.html';
-        ordersBtn.innerText = 'My Orders';
-        nav.appendChild(ordersBtn);
-
-        const logoutBtn = document.createElement('a');
-        logoutBtn.href = '#';
-        logoutBtn.innerText = `Logout (${user.name})`;
-        logoutBtn.onclick = (e) => {
-          e.preventDefault();
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          window.location.reload();
-        };
-        nav.appendChild(logoutBtn);
-      } else {
-        const loginBtn = document.createElement('a');
-        loginBtn.href = 'login.html';
-        loginBtn.innerText = 'Login / Register';
-        nav.appendChild(loginBtn);
-      }
-    });
-  </script>
+    <p style="text-align: center; margin-top: 2rem; font-family: sans-serif;">Redirecting...</p>
 </body>
 </html>

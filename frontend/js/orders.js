@@ -101,14 +101,22 @@ closeModalBtn.onclick = () => {
 // Add Logout logic to Nav
 const nav = document.querySelector('nav');
 if (nav) {
+  // Add Admin link ONLY if the user is an admin
+  if (user && user.role === 'admin') {
+    const adminBtn = document.createElement('a');
+    adminBtn.href = 'admin.html';
+    adminBtn.innerText = 'Admin Portal';
+    nav.appendChild(adminBtn);
+  }
+
   const logoutBtn = document.createElement('a');
   logoutBtn.href = '#';
-  logoutBtn.innerText = `Logout (${user.name})`;
+  logoutBtn.innerText = `Logout (${user ? user.name : ''})`;
   logoutBtn.onclick = (e) => {
     e.preventDefault();
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    window.location.href = 'index.html';
+    window.location.href = 'login.html';
   };
   nav.appendChild(logoutBtn);
 }

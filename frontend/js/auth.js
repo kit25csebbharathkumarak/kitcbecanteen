@@ -1,5 +1,18 @@
 const API_URL = `${window.location.origin}/api`;
 
+// Redirect if already logged in
+const token = localStorage.getItem('token');
+const user = JSON.parse(localStorage.getItem('user') || 'null');
+const currentPath = window.location.pathname;
+
+if (token && user && (currentPath.endsWith('login.html') || currentPath.endsWith('register.html') || currentPath.endsWith('/') || currentPath.endsWith('index.html'))) {
+  if (user.role === 'admin') {
+    window.location.href = 'admin.html';
+  } else {
+    window.location.href = 'menu.html';
+  }
+}
+
 const loginForm = document.getElementById('login-form');
 const registerForm = document.getElementById('register-form');
 const errorMsg = document.getElementById('error-msg');
@@ -71,6 +84,7 @@ if (registerForm) {
 function logout() {
   localStorage.removeItem('token');
   localStorage.removeItem('user');
-  window.location.href = 'index.html';
+  window.location.href = 'login.html';
 }
 window.logout = logout;
+

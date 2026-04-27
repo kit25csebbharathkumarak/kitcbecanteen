@@ -12,7 +12,13 @@ const socket = io();
 // DOM
 const ordersBoard = document.getElementById('orders-board');
 const adminMenuList = document.getElementById('admin-menu-list');
+const recentlyScannedContainer = document.getElementById('recently-scanned-container');
+const scannedOrderDetails = document.getElementById('scanned-order-details');
+const orderSearchInput = document.getElementById('order-search');
+
 let orders = [];
+let lastScannedOrderId = null;
+let searchQuery = '';
 
 // Initialize QR Scanner
 const html5QrcodeScanner = new Html5QrcodeScanner(
@@ -41,6 +47,11 @@ async function fetchOrderAndFulfill(orderId) {
       return;
     }
     const order = await res.json();
+    
+    // Set as last scanned
+    lastScannedOrderId = order.id;
+    renderScannedOrderDetails(order);
+
     if (order.status === 'Delivered') {
       alert(`Order ${orderId} is already delivered.`);
       return;
@@ -48,10 +59,40 @@ async function fetchOrderAndFulfill(orderId) {
     
     // Update status
     await updateOrderStatus(orderId, 'Delivered');
-    alert(`Order ${orderId} verified and marked as Delivered!`);
+    
+    // Scroll to the order card in the list
+    setTimeout(() => {
+      const card = document.getElementById(`order-card-${orderId}`);
+      if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 500);
+
   } catch (err) {
     console.error(err);
   }
+}
+
+function renderScannedOrderDetails(order) {
+  const items = JSON.parse(order.items);
+  const itemsStr = items.map(i => `<li style="margin-bottom: 0.3rem;"><strong>${i.quantity}x</strong> ${i.name}</li>`).join('');
+  
+  scannedOrderDetails.innerHTML = `
+    <div style="display: flex; gap: 1.5rem; align-items: flex-start; flex-wrap: wrap;">
+      <div style="flex: 1; min-width: 200px;">
+        <h4 style="font-family: monospace; font-size: 1.2rem; margin-bottom: 0.5rem;">${order.id}</h4>
+        <ul style="list-style: none; padding: 0; font-size: 1rem;">
+          ${itemsStr}
+        </ul>
+      </div>
+      <div style="text-align: right;">
+        <div style="font-size: 1.4rem; font-weight: 700; color: var(--primary-color);">₹${order.total}</div>
+        <div style="margin-top: 0.5rem;"><span class="badge ${order.status.toLowerCase()}">${order.status}</span></div>
+      </div>
+    </div>
+  `;
+  recentlyScannedContainer.style.display = 'block';
+  renderOrders(); // Refresh to show highlight
 }
 
 async function updateOrderStatus(id, status) {
@@ -84,12 +125,22 @@ async function fetchOrders() {
 
 function renderOrders() {
   ordersBoard.innerHTML = '';
-  orders.forEach(order => {
+  const filteredOrders = orders.filter(o => 
+    o.id.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  if (filteredOrders.length === 0) {
+    ordersBoard.innerHTML = `<div style="text-align: center; padding: 3rem; color: var(--text-muted);">No orders found matching "${searchQuery}"</div>`;
+    return;
+  }
+
+  filteredOrders.forEach(order => {
     const items = JSON.parse(order.items);
     const itemsStr = items.map(i => `${i.quantity}x ${i.name}`).join(', ');
     
     const div = document.createElement('div');
-    div.className = `order-card glass-panel ${order.status.toLowerCase()}`;
+    div.id = `order-card-${order.id}`;
+    div.className = `order-card glass-panel ${order.status.toLowerCase()} ${lastScannedOrderId === order.id ? 'highlight' : ''}`;
     div.innerHTML = `
       <div class="order-details">
         <h4>${order.id}</h4>
@@ -111,6 +162,7 @@ socket.on('new_order', (order) => {
   if (!orders.find(o => o.id === order.id)) {
     orders.unshift(order);
     renderOrders();
+    fetchItemStats(); // Refresh stats on new order
   }
 });
 
@@ -119,8 +171,32 @@ socket.on('order_status_update', (data) => {
   if (o) {
     o.status = data.status;
     renderOrders();
+    fetchItemStats(); // Refresh stats on status update
   }
 });
+
+// Delete all delivered orders
+async function clearDeliveredOrders() {
+  if (!confirm('Delete all delivered orders now? This cannot be undone.')) return;
+
+  try {
+    const res = await fetch(`${API_URL}/orders/delivered`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (!res.ok) {
+      alert('Failed to clear delivered orders.');
+      return;
+    }
+
+    alert('Delivered orders cleared successfully.');
+    fetchOrders();
+  } catch (err) {
+    console.error(err);
+    alert('Error clearing delivered orders.');
+  }
+}
 
 // Admin Menu Management
 async function fetchAdminMenu() {
@@ -229,15 +305,19 @@ async function fetchItemStats() {
 
 function renderItemStats(stats) {
   const statsDiv = document.getElementById('item-stats');
+  const totalRevenueDiv = document.getElementById('total-revenue-stat');
   statsDiv.innerHTML = '';
 
   const statsArray = Object.entries(stats);
   if (statsArray.length === 0) {
     statsDiv.innerHTML = '<p style="color: var(--text-muted); font-style: italic;">No sales data available yet.</p>';
+    totalRevenueDiv.innerText = 'Total Revenue: ₹0.00';
     return;
   }
 
-  statsArray.sort((a, b) => b[1].totalQuantity - a[1].totalQuantity);
+  statsArray.sort((a, b) => b[1].orderedQuantity - a[1].orderedQuantity);
+
+  let grandTotalRevenue = 0;
 
   statsArray.forEach(([itemId, stat]) => {
     const div = document.createElement('div');
@@ -247,11 +327,14 @@ function renderItemStats(stats) {
     div.innerHTML = `
       <div style="font-weight: 600;">${stat.name}</div>
       <div style="font-size: 0.9rem; color: var(--text-muted);">
-        Quantity Sold: ${stat.totalQuantity} | Revenue: ₹${stat.totalRevenue.toFixed(2)}
+        Ordered: ${stat.orderedQuantity} | Delivered: ${stat.deliveredQuantity} | Revenue: ₹${stat.totalRevenue.toFixed(2)}
       </div>
     `;
     statsDiv.appendChild(div);
+    grandTotalRevenue += stat.totalRevenue;
   });
+
+  totalRevenueDiv.innerText = `Total Revenue: ₹${grandTotalRevenue.toFixed(2)}`;
 }
 
 // Add item form submission
@@ -306,3 +389,10 @@ if (nav) {
 fetchOrders();
 fetchAdminMenu();
 fetchItemStats();
+
+document.getElementById('clear-delivered-btn').addEventListener('click', clearDeliveredOrders);
+
+orderSearchInput.addEventListener('input', (e) => {
+  searchQuery = e.target.value;
+  renderOrders();
+});

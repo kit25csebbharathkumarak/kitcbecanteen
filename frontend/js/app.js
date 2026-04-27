@@ -9,6 +9,9 @@ if (!token || !user) {
 
 let cart = {};
 let menuItems = [];
+let searchQuery = '';
+
+const socket = io();
 
 // DOM Elements
 const menuGrid = document.getElementById('menu-grid');
@@ -19,6 +22,7 @@ const qrModal = document.getElementById('qr-modal');
 const closeModalBtn = document.getElementById('close-modal');
 const qrcodeContainer = document.getElementById('qrcode');
 const orderIdDisplay = document.getElementById('order-id-display');
+const menuSearchInput = document.getElementById('menu-search');
 
 async function fetchMenu() {
   try {
@@ -34,7 +38,16 @@ async function fetchMenu() {
 
 function renderMenu() {
   menuGrid.innerHTML = '';
-  menuItems.forEach(item => {
+  const filteredItems = menuItems.filter(item => 
+    item.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  if (filteredItems.length === 0) {
+    menuGrid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">No items found matching "${searchQuery}"</div>`;
+    return;
+  }
+
+  filteredItems.forEach(item => {
     if (!item.available) return;
     
     const div = document.createElement('div');
@@ -219,6 +232,11 @@ closeModalBtn.onclick = () => {
   qrModal.classList.remove('active');
 };
 
+// Socket Events
+socket.on('menu_updated', () => {
+  fetchMenu();
+});
+
 // Init
 fetchMenu();
 
@@ -229,14 +247,29 @@ if (nav) {
   ordersBtn.innerText = 'My Orders';
   nav.appendChild(ordersBtn);
 
+  // Add Admin link ONLY if the user is an admin
+  if (user && user.role === 'admin') {
+    const adminBtn = document.createElement('a');
+    adminBtn.href = 'admin.html';
+    adminBtn.innerText = 'Admin Portal';
+    nav.appendChild(adminBtn);
+  }
+
   const logoutBtn = document.createElement('a');
   logoutBtn.href = '#';
-  logoutBtn.innerText = `Logout (${user.name})`;
+  logoutBtn.innerText = `Logout (${user ? user.name : ''})`;
   logoutBtn.onclick = (e) => {
     e.preventDefault();
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    window.location.href = 'index.html';
+    window.location.href = 'login.html';
   };
   nav.appendChild(logoutBtn);
+}
+
+if (menuSearchInput) {
+  menuSearchInput.addEventListener('input', (e) => {
+    searchQuery = e.target.value;
+    renderMenu();
+  });
 }

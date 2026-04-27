@@ -175,6 +175,7 @@ app.post('/api/items', requireAdmin, (req, res) => {
   db.run("INSERT INTO items (name, price, image, available) VALUES (?, ?, ?, ?)",
     [name, price, image, available === undefined ? 1 : available], function(err) {
       if (err) return res.status(500).json({ error: err.message });
+      io.emit('menu_updated');
       res.json({ id: this.lastID });
   });
 });
@@ -186,6 +187,7 @@ app.put('/api/items/:id', requireAdmin, (req, res) => {
   db.run("UPDATE items SET name=?, price=?, image=?, available=? WHERE id=?", 
     [name, price, image, available ? 1 : 0, id], function(err) {
       if (err) return res.status(500).json({ error: err.message });
+      io.emit('menu_updated');
       res.json({ updated: this.changes });
     }
   );
@@ -196,6 +198,7 @@ app.delete('/api/items/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
   db.run("DELETE FROM items WHERE id=?", [id], function(err) {
     if (err) return res.status(500).json({ error: err.message });
+    io.emit('menu_updated');
     res.json({ deleted: this.changes });
   });
 });
@@ -271,6 +274,14 @@ app.put('/api/orders/:id/status', requireAdmin, (req, res) => {
   });
 });
 
+// Delete all delivered orders (Admin)
+app.delete('/api/orders/delivered', requireAdmin, (req, res) => {
+  db.run("DELETE FROM orders WHERE status='Delivered'", [], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ deleted: this.changes });
+  });
+});
+
 // Fetch specific order details via ID (For QR Scan - Admin only)
 app.get('/api/orders/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
@@ -283,7 +294,7 @@ app.get('/api/orders/:id', requireAdmin, (req, res) => {
 
 // Get item sales statistics (Admin)
 app.get('/api/items/stats', requireAdmin, (req, res) => {
-  db.all("SELECT * FROM orders WHERE status = 'Delivered'", [], (err, orders) => {
+  db.all("SELECT * FROM orders", [], (err, orders) => {
     if (err) return res.status(500).json({ error: err.message });
     
     const itemStats = {};
@@ -294,18 +305,45 @@ app.get('/api/items/stats', requireAdmin, (req, res) => {
         if (!itemStats[item.id]) {
           itemStats[item.id] = {
             name: item.name,
-            totalQuantity: 0,
+            orderedQuantity: 0,
+            deliveredQuantity: 0,
             totalRevenue: 0
           };
         }
-        itemStats[item.id].totalQuantity += item.quantity;
-        itemStats[item.id].totalRevenue += item.quantity * item.price;
+        itemStats[item.id].orderedQuantity += item.quantity;
+        if (order.status === 'Delivered') {
+          itemStats[item.id].deliveredQuantity += item.quantity;
+          itemStats[item.id].totalRevenue += item.quantity * item.price;
+        }
       });
     });
     
     res.json(itemStats);
   });
 });
+
+function cleanupDeliveredOrders() {
+  db.run("DELETE FROM orders WHERE status='Delivered' AND date(created_at) < date('now','localtime')", [], function(err) {
+    if (err) {
+      console.error('Delivered orders cleanup failed:', err.message);
+    } else if (this.changes > 0) {
+      console.log(`Cleaned up ${this.changes} delivered orders from previous days.`);
+    }
+  });
+}
+
+// Remove delivered orders from previous days immediately on startup
+cleanupDeliveredOrders();
+
+// Schedule cleanup at midnight local time every day
+const now = new Date();
+const nextMidnight = new Date(now);
+nextMidnight.setHours(24, 0, 0, 0);
+const msUntilMidnight = nextMidnight - now;
+setTimeout(() => {
+  cleanupDeliveredOrders();
+  setInterval(cleanupDeliveredOrders, 24 * 60 * 60 * 1000);
+}, msUntilMidnight);
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {

@@ -8,20 +8,28 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
   <header>
     <a href="index.html" class="logo"><i class="fa-solid fa-utensils"></i> Canteen Express</a>
     <nav>
       <a href="menu.html" class="active">Menu</a>
-      <a href="admin.html">Admin</a>
     </nav>
   </header>
 
   <div class="container menu-layout">
     <main>
-      <h2>Today's Menu</h2>
-      <p style="color: var(--text-muted); margin-bottom: 2rem;">Freshly prepared for you.</p>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
+        <div>
+          <h2>Today's Menu</h2>
+          <p style="color: var(--text-muted);">Freshly prepared for you.</p>
+        </div>
+        <div class="search-box" style="position: relative; min-width: 300px;">
+          <input type="text" id="menu-search" placeholder="Search for food..." style="width: 100%; padding: 0.75rem 1rem; padding-left: 2.5rem; border: 1px solid #ddd; border-radius: 50px; font-family: inherit;">
+          <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+        </div>
+      </div>
       <div class="items-grid" id="menu-grid">
         <!-- Items injected by JS -->
       </div>

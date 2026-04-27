@@ -496,3 +496,35 @@ nav a:hover, nav a.active {
   font-weight: 600;
 }
 
+
+/* Animations & Highlights */
+@keyframes slideInDown {
+  from {
+    transform: translate3d(0, -20px, 0);
+    opacity: 0;
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+}
+
+@keyframes pulse-highlight {
+  0% { box-shadow: 0 0 0 0 rgba(229, 57, 53, 0.4); }
+  70% { box-shadow: 0 0 0 15px rgba(229, 57, 53, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(229, 57, 53, 0); }
+}
+
+.order-card.highlight {
+  border: 2px solid var(--primary-color) !important;
+  animation: pulse-highlight 2s infinite;
+  background: rgba(229, 57, 53, 0.05) !important;
+  transform: scale(1.02);
+  transition: var(--transition);
+}
+
+.search-box input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(229, 57, 53, 0.1);
+}
