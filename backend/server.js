@@ -62,6 +62,13 @@ app.post('/api/auth/send-otp', (req, res) => {
 
   otps.set(email.toLowerCase(), { otp, expiresAt });
 
+  const isSmtpConfigured = process.env.EMAIL_USER && process.env.EMAIL_PASS && process.env.EMAIL_PASS !== 'your_gmail_app_password';
+
+  if (!isSmtpConfigured) {
+    console.log(`[DEV MODE] OTP for ${email} is: ${otp}`);
+    return res.json({ success: true, message: 'Verification code generated. (Check server logs since SMTP is missing)' });
+  }
+
   const mailOptions = {
     from: process.env.EMAIL_USER,
     to: email,
@@ -77,7 +84,8 @@ app.post('/api/auth/send-otp', (req, res) => {
   transporter.sendMail(mailOptions, (error) => {
     if (error) {
       console.error('Send OTP Email error:', error);
-      return res.status(500).json({ error: 'Failed to send verification code. Please check SMTP configuration.' });
+      console.log(`[DEV MODE FALLBACK] OTP for ${email} is: ${otp}`);
+      return res.json({ success: true, message: 'Verification code generated. (Check server logs since SMTP failed)' });
     }
     res.json({ success: true, message: 'Verification code sent to your email.' });
   });
@@ -150,6 +158,13 @@ app.post('/api/auth/forgot-password', (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
 
         const resetLink = `${req.protocol}://${req.get('host')}/reset-password.html?token=${resetToken}`;
+        const isSmtpConfigured = process.env.EMAIL_USER && process.env.EMAIL_PASS && process.env.EMAIL_PASS !== 'your_gmail_app_password';
+
+        if (!isSmtpConfigured) {
+          console.log(`[DEV MODE] Password reset link for ${email}: ${resetLink}`);
+          return res.json({ message: 'Password reset link generated. (Check server logs since SMTP is missing)' });
+        }
+
         const mailOptions = {
           from: process.env.EMAIL_USER,
           to: email,
@@ -166,7 +181,8 @@ app.post('/api/auth/forgot-password', (req, res) => {
         transporter.sendMail(mailOptions, (error) => {
           if (error) {
             console.error('Email error:', error);
-            return res.status(500).json({ error: 'Failed to send email. Check SMTP configuration.' });
+            console.log(`[DEV MODE FALLBACK] Password reset link for ${email}: ${resetLink}`);
+            return res.json({ message: 'Password reset link generated. (Check server logs since SMTP failed)' });
           }
           res.json({ message: 'Password reset link sent to your email.' });
         });
