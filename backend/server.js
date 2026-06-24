@@ -4,7 +4,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const crypto = require('crypto');
 const path = require('path');
 const jwt = require('jsonwebtoken');
@@ -17,16 +17,7 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecret_canteen_key';
-
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false, // true for 465, false for other ports (automatically enables STARTTLS)
-  auth: { 
-    user: process.env.EMAIL_USER, 
-    pass: process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/\s+/g, '') : undefined 
-  }
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // ─── CORS + STATIC FILES ──────────────────────────────────────────────────────
 app.use(cors());
@@ -58,7 +49,7 @@ function requireAdmin(req, res, next) {
 // ─── AUTH ROUTES ──────────────────────────────────────────────────────────────
 const otps = new Map();
 
-app.post('/api/auth/send-otp', (req, res) => {
+app.post('/api/auth/send-otp', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email is required' });
 
@@ -68,25 +59,29 @@ app.post('/api/auth/send-otp', (req, res) => {
 
   otps.set(email.toLowerCase(), { otp, expiresAt });
 
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: email,
-    subject: 'Verification Code — Canteen Express',
-    html: `
-      <h2>Email Verification Code</h2>
-      <p>Thank you for registering at Canteen Express. Please use the following One-Time Password (OTP) to complete your registration:</p>
-      <div style="font-size: 1.8rem; font-weight: bold; color: #e53935; letter-spacing: 2px; margin: 1.5rem 0;">${otp}</div>
-      <p>This OTP is valid for 5 minutes. If you did not request this code, please ignore this email.</p>
-    `
-  };
+  try {
+    const { data, error } = await resend.emails.send({
+      from: 'Canteen Express <onboarding@resend.dev>', // Use a custom domain if verified, otherwise onboarding@resend.dev
+      to: email,
+      subject: 'Verification Code — Canteen Express',
+      html: `
+        <h2>Email Verification Code</h2>
+        <p>Thank you for registering at Canteen Express. Please use the following One-Time Password (OTP) to complete your registration:</p>
+        <div style="font-size: 1.8rem; font-weight: bold; color: #e53935; letter-spacing: 2px; margin: 1.5rem 0;">${otp}</div>
+        <p>This OTP is valid for 5 minutes. If you did not request this code, please ignore this email.</p>
+      `
+    });
 
-  transporter.sendMail(mailOptions, (error) => {
     if (error) {
       console.error('Send OTP Email error:', error);
-      return res.status(500).json({ error: 'Failed to send verification code. Check Render logs for error details.' });
+      return res.status(500).json({ error: 'Failed to send verification code via Resend.' });
     }
+    
     res.json({ success: true, message: 'Verification code sent to your email.' });
-  });
+  } catch (err) {
+    console.error('Send OTP Email exception:', err);
+    return res.status(500).json({ error: 'Internal server error while sending email.' });
+  }
 });
 
 app.post('/api/auth/register', (req, res) => {
@@ -156,26 +151,29 @@ app.post('/api/auth/forgot-password', (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
 
         const resetLink = `${req.protocol}://${req.get('host')}/reset-password.html?token=${resetToken}`;
-        const mailOptions = {
-          from: process.env.EMAIL_USER,
-          to: email,
-          subject: 'Password Reset — Canteen Express',
-          html: `
-            <h2>Password Reset Request</h2>
-            <p>Click the link below to set a new password:</p>
-            <a href="${resetLink}">${resetLink}</a>
-            <p>This link will expire in 1 hour.</p>
-            <p>If you did not request this, please ignore this email.</p>
-          `
-        };
+        try {
+          const { data, error } = await resend.emails.send({
+            from: 'Canteen Express <onboarding@resend.dev>',
+            to: email,
+            subject: 'Password Reset — Canteen Express',
+            html: `
+              <h2>Password Reset Request</h2>
+              <p>Click the link below to set a new password:</p>
+              <a href="${resetLink}">${resetLink}</a>
+              <p>This link will expire in 1 hour.</p>
+              <p>If you did not request this, please ignore this email.</p>
+            `
+          });
 
-        transporter.sendMail(mailOptions, (error) => {
           if (error) {
             console.error('Email error:', error);
-            return res.status(500).json({ error: 'Failed to send reset link. Check Render logs for error details.' });
+            return res.status(500).json({ error: 'Failed to send reset link via Resend.' });
           }
           res.json({ message: 'Password reset link sent to your email.' });
-        });
+        } catch (err) {
+          console.error('Email exception:', err);
+          return res.status(500).json({ error: 'Internal server error while sending email.' });
+        }
       });
   });
 });
