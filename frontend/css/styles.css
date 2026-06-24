@@ -9,11 +9,11 @@
   --text-muted: #636e72;
   --glass-bg: rgba(255, 255, 255, 0.85);
   --glass-border: rgba(255, 255, 255, 0.3);
-  --shadow-sm: 0 4px 6px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 10px 20px rgba(229, 57, 53, 0.15);
-  --shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.1);
-  --border-radius: 16px;
-  --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  --border-radius: 2px;
+  --transition: all 0.2s ease-in-out;
+  --shadow-sm: 2px 2px 0px rgba(0, 0, 0, 0.1);
+  --shadow-md: 4px 4px 0px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 8px 8px 0px rgba(0, 0, 0, 0.1);
 }
 
 * {
@@ -31,28 +31,31 @@ body {
   flex-direction: column;
 }
 
-/* Background gradient for premium feel */
+/* Solid background for human-made feel */
 body::before {
   content: '';
   position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: radial-gradient(circle at top right, rgba(229, 57, 53, 0.1), transparent 40%),
-              radial-gradient(circle at bottom left, rgba(229, 57, 53, 0.05), transparent 40%);
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #fdfdfd;
   z-index: -1;
 }
 
 /* Typography */
-h1, h2, h3, h4 {
+h1,
+h2,
+h3,
+h4 {
   font-weight: 700;
   line-height: 1.2;
 }
 
-/* Glassmorphism Container */
+/* Boxy Panel */
 .glass-panel {
-  background: var(--glass-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--glass-border);
+  background: #ffffff;
+  border: 2px solid var(--text-main);
   border-radius: var(--border-radius);
   box-shadow: var(--shadow-md);
 }
@@ -66,9 +69,8 @@ header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(10px);
-  box-shadow: var(--shadow-sm);
+  background: #ffffff;
+  border-bottom: 2px solid var(--text-main);
 }
 
 .logo {
@@ -93,7 +95,8 @@ nav a {
   transition: var(--transition);
 }
 
-nav a:hover, nav a.active {
+nav a:hover,
+nav a.active {
   color: var(--primary-color);
 }
 
@@ -104,47 +107,46 @@ nav a:hover, nav a.active {
   justify-content: center;
   gap: 0.5rem;
   padding: 0.75rem 1.5rem;
-  border-radius: 50px;
+  border-radius: var(--border-radius);
   font-family: inherit;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
   transition: var(--transition);
-  border: none;
+  border: 2px solid var(--text-main);
   text-decoration: none;
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+  background: var(--primary-color);
   color: white;
-  box-shadow: 0 4px 15px rgba(229, 57, 53, 0.4);
+  box-shadow: 4px 4px 0px var(--text-main);
 }
 
 .btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(229, 57, 53, 0.6);
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0px var(--text-main);
 }
 
 .btn-secondary {
   background: white;
-  color: var(--primary-color);
-  border: 2px solid var(--primary-color);
+  color: var(--text-main);
+  border: 2px solid var(--text-main);
 }
 
 .btn-secondary:hover {
-  background: var(--primary-color);
-  color: white;
+  background: var(--bg-color);
 }
 
 .btn-danger {
-  background: linear-gradient(135deg, #dc3545, #c82333);
+  background: #ff5252;
   color: white;
-  box-shadow: 0 4px 15px rgba(220, 53, 69, 0.4);
+  box-shadow: 4px 4px 0px var(--text-main);
 }
 
 .btn-danger:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(220, 53, 69, 0.6);
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0px var(--text-main);
 }
 
 /* Landing Page */
@@ -164,9 +166,9 @@ nav a:hover, nav a.active {
 .hero h1 {
   font-size: 4rem;
   margin-bottom: 1rem;
-  background: linear-gradient(135deg, var(--primary-dark), var(--primary-light));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--text-main);
+  text-transform: uppercase;
+  letter-spacing: -2px;
 }
 
 .hero p {
@@ -216,14 +218,15 @@ nav a:hover, nav a.active {
 }
 
 .menu-item:hover {
-  transform: translateY(-5px);
-  box-shadow: var(--shadow-lg);
+  transform: translate(-4px, -4px);
+  box-shadow: 12px 12px 0px rgba(0, 0, 0, 0.1);
 }
 
 .item-img-wrap {
   width: 100%;
   height: 180px;
-  border-radius: calc(var(--border-radius) - 4px);
+  border-radius: 0;
+  border-bottom: 2px solid var(--text-main);
   overflow: hidden;
   margin-bottom: 1rem;
 }
@@ -270,7 +273,7 @@ nav a:hover, nav a.active {
   font-size: 1.5rem;
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid rgba(0,0,0,0.05);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .cart-items {
@@ -285,9 +288,10 @@ nav a:hover, nav a.active {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: rgba(255,255,255,0.5);
+  background: #ffffff;
   padding: 0.75rem;
-  border-radius: 8px;
+  border: 1px solid var(--text-main);
+  border-radius: var(--border-radius);
 }
 
 .cart-item-controls {
@@ -309,14 +313,14 @@ nav a:hover, nav a.active {
 }
 
 .cart-item-controls button:hover {
-  background: var(--primary-color);
+  background: var(--text-main);
   color: white;
 }
 
 .cart-footer {
   margin-top: 1.5rem;
   padding-top: 1.5rem;
-  border-top: 1px solid rgba(0,0,0,0.05);
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .cart-total {
@@ -329,15 +333,15 @@ nav a:hover, nav a.active {
 
 /* Modal for QR Code */
 .modal {
-  display: none; 
-  position: fixed; 
-  z-index: 1000; 
+  display: none;
+  position: fixed;
+  z-index: 1000;
   left: 0;
   top: 0;
-  width: 100%; 
-  height: 100%; 
-  overflow: auto; 
-  background-color: rgba(0,0,0,0.5); 
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(5px);
   align-items: center;
   justify-content: center;
@@ -349,8 +353,13 @@ nav a:hover, nav a.active {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 .modal-content {
@@ -367,17 +376,27 @@ nav a:hover, nav a.active {
 }
 
 @keyframes slideUp {
-  to { transform: translateY(0); }
+  to {
+    transform: translateY(0);
+  }
 }
 
 #qrcode {
   margin: 1.5rem auto;
   display: flex;
   justify-content: center;
+  align-items: center;
   padding: 1rem;
   background: white;
-  border-radius: 8px;
-  box-shadow: var(--shadow-sm);
+  border: 2px solid var(--text-main);
+  border-radius: var(--border-radius);
+  min-height: 280px;
+}
+
+#qrcode img {
+  max-width: 100%;
+  height: auto;
+  display: block;
 }
 
 .close-btn {
@@ -442,19 +461,35 @@ nav a:hover, nav a.active {
 
 .badge {
   padding: 0.4rem 0.8rem;
-  border-radius: 50px;
+  border-radius: var(--border-radius);
   font-size: 0.8rem;
-  font-weight: 600;
+  font-weight: 700;
+  border: 1px solid currentColor;
 }
 
 .badge.pending {
-  background: rgba(241, 196, 15, 0.2);
-  color: #f39c12;
+  background: #fff9c4;
+  color: #fbc02d;
 }
 
 .badge.delivered {
-  background: rgba(46, 204, 113, 0.2);
-  color: #27ae60;
+  background: #c8e6c9;
+  color: #388e3c;
+}
+
+.badge.pending-payment {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.badge.failed {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.badge.confirmed {
+  background: #e8f5e9;
+  color: #2e7d32;
 }
 
 /* Form Styles for Menu Management */
@@ -462,16 +497,18 @@ nav a:hover, nav a.active {
   margin-bottom: 1rem;
   text-align: left;
 }
+
 .form-group label {
   display: block;
   margin-bottom: 0.5rem;
   font-weight: 500;
 }
+
 .form-group input {
   width: 100%;
   padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  border: 2px solid var(--text-main);
+  border-radius: var(--border-radius);
   font-family: inherit;
 }
 
@@ -503,6 +540,7 @@ nav a:hover, nav a.active {
     transform: translate3d(0, -20px, 0);
     opacity: 0;
   }
+
   to {
     transform: translate3d(0, 0, 0);
     opacity: 1;
@@ -510,9 +548,17 @@ nav a:hover, nav a.active {
 }
 
 @keyframes pulse-highlight {
-  0% { box-shadow: 0 0 0 0 rgba(229, 57, 53, 0.4); }
-  70% { box-shadow: 0 0 0 15px rgba(229, 57, 53, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(229, 57, 53, 0); }
+  0% {
+    box-shadow: 0 0 0 0 rgba(229, 57, 53, 0.4);
+  }
+
+  70% {
+    box-shadow: 0 0 0 15px rgba(229, 57, 53, 0);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(229, 57, 53, 0);
+  }
 }
 
 .order-card.highlight {
@@ -527,4 +573,20 @@ nav a:hover, nav a.active {
   outline: none;
   border-color: var(--primary-color);
   box-shadow: 0 0 0 3px rgba(229, 57, 53, 0.1);
+}
+
+/* UPI Pay Button — show on mobile, hide on desktop */
+.upi-pay-btn {
+  display: none !important;
+}
+
+@media (max-width: 768px) {
+  .upi-pay-btn {
+    display: inline-flex !important;
+  }
+}
+
+/* Smooth status badge transitions */
+.badge {
+  transition: background 0.2s ease, color 0.2s ease;
 }

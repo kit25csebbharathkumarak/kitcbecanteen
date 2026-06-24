@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,11 +8,12 @@
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
+
 <body>
   <header>
     <a href="admin.html" class="logo"><i class="fa-solid fa-utensils"></i> Admin Dashboard</a>
     <nav>
-      <a href="admin.html">Back to Admin</a>
+      <a href="admin-menu.html">Back to Menu</a>
     </nav>
   </header>
 
@@ -25,9 +27,15 @@
           <input type="text" id="item-name" required>
         </div>
 
-        <div class="form-group">
-          <label for="item-price">Price (₹)</label>
-          <input type="number" id="item-price" step="0.01" required>
+        <div style="display: flex; gap: 1rem;">
+          <div class="form-group" style="flex: 1;">
+            <label for="item-price">Price (₹)</label>
+            <input type="number" id="item-price" step="0.01" required>
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label for="item-stock">Stock</label>
+            <input type="number" id="item-stock" required min="0">
+          </div>
         </div>
 
         <div class="form-group">
@@ -85,6 +93,7 @@
 
         document.getElementById('item-name').value = item.name;
         document.getElementById('item-price').value = item.price;
+        document.getElementById('item-stock').value = item.stock;
         document.getElementById('item-image').value = item.image;
         document.getElementById('item-available').value = item.available ? '1' : '0';
       } catch (err) {
@@ -99,6 +108,7 @@
 
       const name = document.getElementById('item-name').value;
       const price = parseFloat(document.getElementById('item-price').value);
+      const stock = parseInt(document.getElementById('item-stock').value);
       const image = document.getElementById('item-image').value;
       const available = document.getElementById('item-available').value === '1';
 
@@ -109,12 +119,12 @@
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({ name, price, image, available })
+          body: JSON.stringify({ name, price, image, available, stock })
         });
 
         if (res.ok) {
           alert('Item updated successfully!');
-          window.location.href = 'admin.html';
+          window.location.href = 'admin-menu.html';
         } else {
           alert('Error updating item');
         }
@@ -136,7 +146,7 @@
 
         if (res.ok) {
           alert('Item deleted successfully!');
-          window.location.href = 'admin.html';
+          window.location.href = 'admin-menu.html';
         } else {
           alert('Error deleting item');
         }
@@ -149,4 +159,5 @@
     fetchItem();
   </script>
 </body>
+
 </html>

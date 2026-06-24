@@ -1,78 +1,151 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
 const bcrypt = require('bcrypt');
+const { Pool } = require('pg');
 
-const dbPath = path.resolve(__dirname, 'canteen.db');
-const db = new sqlite3.Database(dbPath);
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
+  throw new Error('DATABASE_URL is required. Set DATABASE_URL in your environment.');
+}
 
-db.serialize(() => {
-  // Create Items Table
-  db.run(`CREATE TABLE IF NOT EXISTS items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    price REAL NOT NULL,
-    image TEXT NOT NULL,
-    available INTEGER DEFAULT 1
-  )`);
+const pool = new Pool({
+  connectionString: databaseUrl,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+});
 
-  // Create Orders Table
-  db.run(`CREATE TABLE IF NOT EXISTS orders (
-    id TEXT PRIMARY KEY,
-    items TEXT NOT NULL,
-    total REAL NOT NULL,
-    status TEXT DEFAULT 'Pending',
-    razorpay_order_id TEXT,
-    razorpay_payment_id TEXT,
-    user_id INTEGER,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
+// Convert SQLite-style ? placeholders to PostgreSQL $1, $2, ... style
+const formatQuery = (sql, params = []) => {
+  let index = 0;
+  const formattedSql = sql.replace(/\?/g, () => `$${++index}`);
+  return { sql: formattedSql, params };
+};
 
-  // Try to add the user_id column in case the table was created before the auth update
-  db.run("ALTER TABLE orders ADD COLUMN user_id INTEGER", (err) => {
-    // Ignore error if column already exists
-  });
+const db = {
+  isPostgres: true,
+  run(sql, params = [], callback) {
+    if (typeof params === 'function') { callback = params; params = []; }
+    const { sql: formatted, params: converted } = formatQuery(sql, params);
+    pool.query(formatted, converted)
+      .then(result => {
+        const info = { changes: result.rowCount, lastID: result.rows?.[0]?.id ?? null };
+        if (callback) callback(null, info);
+      })
+      .catch(err => { if (callback) callback(err); });
+  },
+  get(sql, params = [], callback) {
+    if (typeof params === 'function') { callback = params; params = []; }
+    const { sql: formatted, params: converted } = formatQuery(sql, params);
+    pool.query(formatted, converted)
+      .then(result => callback(null, result.rows[0] || null))
+      .catch(err => callback(err));
+  },
+  all(sql, params = [], callback) {
+    if (typeof params === 'function') { callback = params; params = []; }
+    const { sql: formatted, params: converted } = formatQuery(sql, params);
+    pool.query(formatted, converted)
+      .then(result => callback(null, result.rows))
+      .catch(err => callback(err));
+  },
+  serialize(fn) { fn(); },
+  close() { return pool.end(); }
+};
 
-  // Seed default data if items are empty
-  db.get("SELECT COUNT(*) as count FROM items", (err, row) => {
-    if (row && row.count === 0) {
-      const stmt = db.prepare("INSERT INTO items (name, price, image) VALUES (?, ?, ?)");
-      const defaultItems = [
-        ["Spicy Chicken Burger", 120, "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=500&q=80"],
-        ["Margherita Pizza", 150, "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?auto=format&fit=crop&w=500&q=80"],
-        ["French Fries", 60, "https://images.unsplash.com/photo-1576107232684-1279f3908594?auto=format&fit=crop&w=500&q=80"],
-        ["Cold Coffee", 80, "https://images.unsplash.com/photo-1461023058943-07fcbe16d735?auto=format&fit=crop&w=500&q=80"],
-        ["Grilled Sandwich", 90, "https://images.unsplash.com/photo-1528735602780-2552fd46c7af?auto=format&fit=crop&w=500&q=80"]
-      ];
-      defaultItems.forEach(item => stmt.run(item));
-      stmt.finalize();
-      console.log("Database seeded with default items.");
+// ─── DEFAULT SEED DATA ────────────────────────────────────────────────────────
+const defaultItems = [
+  ['Empty Biryani',   20,  'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=500&q=80', 50],
+  ['Chicken Biryani', 110, 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?auto=format&fit=crop&w=500&q=80', 30],
+  ['Curd Rice',        30, 'https://images.unsplash.com/photo-1576107232684-1279f3908594?auto=format&fit=crop&w=500&q=80', 100],
+  ['Parota Set',       30, 'https://images.unsplash.com/photo-1461023058943-07fcbe16d735?auto=format&fit=crop&w=500&q=80', 40],
+  ['Chicken Rice',    110, 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?auto=format&fit=crop&w=500&q=80', 25],
+];
+
+// ─── DATABASE INITIALISATION ──────────────────────────────────────────────────
+const initializeDatabase = async () => {
+  // Users table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id                 SERIAL PRIMARY KEY,
+      name               TEXT NOT NULL,
+      email              TEXT UNIQUE NOT NULL,
+      password           TEXT NOT NULL,
+      role               TEXT DEFAULT 'student',
+      reset_token        TEXT,
+      reset_token_expiry TIMESTAMP
+    )
+  `);
+
+  // Menu items table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS items (
+      id        SERIAL PRIMARY KEY,
+      name      TEXT NOT NULL,
+      price     NUMERIC NOT NULL,
+      image     TEXT NOT NULL,
+      available BOOLEAN DEFAULT TRUE,
+      stock     INTEGER DEFAULT 0
+    )
+  `);
+
+  // Orders table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS orders (
+      id              TEXT PRIMARY KEY,
+      items           TEXT NOT NULL,
+      total           NUMERIC NOT NULL,
+      status          TEXT DEFAULT 'Pending',
+      paytm_order_id  TEXT,
+      paytm_payment_id TEXT,
+      user_id         INTEGER REFERENCES users(id),
+      created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      txn_ref         TEXT,
+      txn_id          TEXT,
+      paid_at         TIMESTAMP
+    )
+  `);
+
+  // Add new UPI columns to existing orders table if they don't exist yet
+  await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS txn_ref TEXT`);
+  await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS txn_id  TEXT`);
+  await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP`);
+
+  // Transactions table — for webhook idempotency
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS transactions (
+      txn_id     TEXT PRIMARY KEY,
+      order_id   TEXT NOT NULL,
+      status     TEXT NOT NULL,
+      amount     NUMERIC NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Seed menu items if empty
+  const itemsCount = await pool.query('SELECT COUNT(*)::int AS count FROM items');
+  if (parseInt(itemsCount.rows[0].count, 10) === 0) {
+    for (const item of defaultItems) {
+      await pool.query(
+        'INSERT INTO items (name, price, image, stock) VALUES ($1, $2, $3, $4)',
+        item
+      );
     }
-  });
+    console.log('Database seeded with default menu items.');
+  }
 
-  // Create Users Table
-  db.run(`CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    email TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
-    role TEXT DEFAULT 'student',
-    reset_token TEXT,
-    reset_token_expiry DATETIME
-  )`);
+  // Seed admin user if none exists
+  const adminCount = await pool.query("SELECT COUNT(*)::int AS count FROM users WHERE role = 'admin'");
+  if (parseInt(adminCount.rows[0].count, 10) === 0) {
+    const hash = bcrypt.hashSync('admin123', 10);
+    await pool.query(
+      'INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4)',
+      ['Admin', 'admin@canteen.com', hash, 'admin']
+    );
+    console.log('Admin seeded — email: admin@canteen.com  password: admin123');
+  }
 
-  // Try to add the reset token columns in case the table was created before
-  db.run("ALTER TABLE users ADD COLUMN reset_token TEXT", (err) => {});
-  db.run("ALTER TABLE users ADD COLUMN reset_token_expiry DATETIME", (err) => {});
+  console.log('✅ Database initialised successfully.');
+};
 
-  // Seed Admin user
-  db.get("SELECT COUNT(*) as count FROM users WHERE role = 'admin'", (err, row) => {
-    if (row && row.count === 0) {
-      const hash = bcrypt.hashSync('admin123', 10);
-      db.run("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
-        ['Admin', 'admin@canteen.com', hash, 'admin']);
-      console.log("Database seeded with default Admin user.");
-    }
-  });
+initializeDatabase().catch((error) => {
+  console.error('PostgreSQL initialisation failed:', error);
+  process.exit(1);
 });
 
 module.exports = db;

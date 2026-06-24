@@ -4,5 +4,5 @@ services:
     env: node
     plan: free
     region: singapore
-    buildCommand: npm install --build-from-source=sqlite3
+    buildCommand: npm install
     startCommand: npm start

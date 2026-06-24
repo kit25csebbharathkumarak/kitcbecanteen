@@ -4,87 +4,85 @@ A modern, real-time food ordering system for educational institutions with QR co
 
 ## Features
 
-- 🛒 Real-time food ordering
-- 📱 QR code verification for order pickup
-- 👨‍💼 Admin dashboard with menu management
-- 💳 Razorpay payment integration
-- 📧 Email notifications
-- 🔐 JWT authentication
-- 📊 Sales analytics
+- 🛒 Real-time food ordering with cart checkout
+- 📱 QR code pickup verification
+- 👨‍💼 Admin dashboard with menu, stock, and order management
+- 💳 UPI Gateway dynamic QR payment integration
+- 📧 Email notifications for password reset and registration
+- 🔐 JWT-based authentication
+- 📊 Sales analytics and order insights
 
 ## Tech Stack
 
 - **Backend**: Node.js, Express, Socket.io
-- **Database**: SQLite
+- **Database**: PostgreSQL
 - **Frontend**: HTML, CSS, JavaScript
-- **Payments**: Razorpay
+- **Payments**: UPI Gateway dynamic QR integration
 - **Authentication**: JWT
 
 ## Local Development
 
-1. Clone the repository
+1. Clone the repository.
 2. Install dependencies:
    ```bash
    npm install
    ```
-3. Create a `.env` file with your configuration
+3. Create a `.env` file with your configuration.
 4. Run the server:
    ```bash
    npm start
    ```
-5. Open `http://localhost:3000` in your browser
+5. Open `http://localhost:3000` in your browser.
 
 ## Deployment
 
-### Free Deployment on Render
+### Render Deployment
 
-This repo includes a `render.yaml` manifest so Render can build and deploy it more reliably.
+This repository includes a `render.yaml` manifest for Render.
 
-1. **Fork this repository** to your GitHub account
-
-2. **Create a Render account** at [render.com](https://render.com)
-
-3. **Connect your GitHub repository**:
-   - Go to Dashboard → New → Web Service
-   - Connect your GitHub account
-   - Select this repository
-
-4. **Configure the service**:
+1. Fork this repository.
+2. Create a Render account at [render.com](https://render.com).
+3. Connect your GitHub repository.
+4. Configure the service:
    - **Name**: canteen-express
    - **Environment**: Node
-   - **Build Command**: `npm install --build-from-source=sqlite3`
+   - **Build Command**: `npm install`
    - **Start Command**: `npm start`
    - **Plan**: Free
-
-5. **Add Environment Variables**:
-   ```
-   RAZORPAY_KEY_ID=your_razorpay_key_id
-   RAZORPAY_KEY_SECRET=your_razorpay_key_secret
-   JWT_SECRET=your_jwt_secret
-   EMAIL_USER=your_email@gmail.com
-   EMAIL_PASS=your_app_password
-   ```
-
-6. **Deploy**: Click "Create Web Service"
+5. Add environment variables.
+6. Deploy the service.
 
 ### Important Notes
 
-- **Node version**: This repo now targets `node 18.x`, which is compatible with Render's free environment.
-- **Database**: SQLite is stored on the service filesystem and may reset after redeploy or container restart.
-- **Email**: Use Gmail app passwords for `EMAIL_PASS`.
-- **Payments**: This project currently runs Razorpay in test mode.
+- **Node version**: Use Node 18.x or newer.
+- **Database**: This app now uses PostgreSQL via `DATABASE_URL`, which is the correct production approach on Render.
+- **Email**: Use Gmail app passwords for `EMAIL_PASS` if using Gmail SMTP.
+- **Payments**: UPI Gateway dynamic QR payments require a valid API key and webhook configuration.
+- **Email**: Use Gmail app passwords for `EMAIL_PASS` if using Gmail SMTP.
 
 ## Environment Variables
 
 Create a `.env` file in the root directory:
 
 ```env
-RAZORPAY_KEY_ID=rzp_test_your_key
-RAZORPAY_KEY_SECRET=your_secret_key
-JWT_SECRET=your_super_secret_key
+DATABASE_URL=postgres://username:password@hostname:port/databasename
+UPIGATEWAY_API_KEY=your_upigateway_api_key
+UPIGATEWAY_BASE_URL=https://merchant.upigateway.com
+UPIGATEWAY_CREATE_PATH=/api/v1/dynamic-qr
+UPIGATEWAY_API_KEY_HEADER=Authorization
+JWT_SECRET=your_jwt_secret
 EMAIL_USER=your_email@gmail.com
 EMAIL_PASS=your_app_password
+PORT=3000
 ```
+
+Optional fields:
+
+```env
+ADMIN_UPI_NAME=Canteen Express
+UPIGATEWAY_WEBHOOK_SECRET=your_upigateway_webhook_secret  # optional; if absent, webhook auth is not enforced
+UPIGATEWAY_WEBHOOK_HEADER=x-api-key  # optional; used only when webhook secret is configured
+```}
 
 ## API Endpoints
 
@@ -101,17 +99,17 @@ EMAIL_PASS=your_app_password
 - `GET /api/items/stats` - Get sales statistics
 
 ### Orders
-- `POST /api/orders/create` - Create order
+- `POST /api/orders/create` - Create order and initiate UPI Gateway QR payment
 - `GET /api/orders` - Get all orders (Admin)
 - `GET /api/orders/me` - Get user's orders
 - `PUT /api/orders/:id/status` - Update order status
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
+1. Fork the repository.
+2. Create a feature branch.
+3. Make your changes.
+4. Submit a pull request.
 
 ## License
 

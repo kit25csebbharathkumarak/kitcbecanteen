@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manage Menu - Admin Dashboard</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+  <header>
+    <a href="admin.html" class="logo"><i class="fa-solid fa-utensils"></i> Admin Dashboard</a>
+    <nav id="admin-nav">
+      <a href="admin.html">Dashboard</a>
+      <a href="admin-menu.html" class="active">Manage Menu</a>
+      <a href="admin-stats.html">Sales Statistics</a>
+    </nav>
+  </header>
+
+  <div class="container">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+        <h2>Menu Management</h2>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 400px; gap: 2rem; align-items: start;">
+        <main>
+            <div class="glass-panel" style="padding: 1.5rem;">
+                <h3 style="margin-bottom: 1.5rem; border-bottom: 2px solid var(--text-main); padding-bottom: 0.5rem;">All Menu Items</h3>
+                <div id="admin-menu-list">
+                    <!-- Items injected by JS -->
+                </div>
+            </div>
+        </main>
+
+        <aside>
+            <div class="glass-panel" style="padding: 1.5rem;">
+                <h3 style="margin-bottom: 1.5rem; border-bottom: 2px solid var(--text-main); padding-bottom: 0.5rem;">Add New Item</h3>
+                <form id="add-item-form">
+                    <div class="form-group">
+                        <label>Name</label>
+                        <input type="text" id="new-item-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Image URL</label>
+                        <input type="url" id="new-item-image" required placeholder="https://example.com/image.jpg">
+                    </div>
+                    <div style="display: flex; gap: 1rem;">
+                        <div class="form-group" style="flex: 1;">
+                            <label>Price (₹)</label>
+                            <input type="number" id="new-item-price" required>
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label>Stock</label>
+                            <input type="number" id="new-item-stock" required min="0" value="0">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Initially Available</label>
+                        <select id="new-item-avail" style="width: 100%; padding: 0.75rem; border: 2px solid var(--text-main); border-radius: var(--border-radius);">
+                            <option value="1">Yes</option>
+                            <option value="0">No</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Add to Menu</button>
+                </form>
+            </div>
+        </aside>
+    </div>
+  </div>
+
+  <script src="js/admin-menu.js"></script>
+</body>
+</html>

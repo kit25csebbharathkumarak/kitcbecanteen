@@ -11,9 +11,11 @@
 </head>
 <body>
   <header>
-    <a href="index.html" class="logo"><i class="fa-solid fa-utensils"></i> Admin Dashboard</a>
-    <nav>
-      <a href="menu.html">View Menu</a>
+    <a href="admin.html" class="logo"><i class="fa-solid fa-utensils"></i> Admin Dashboard</a>
+    <nav id="admin-nav">
+      <a href="admin.html" class="active">Dashboard</a>
+      <a href="admin-menu.html">Manage Menu</a>
+      <a href="admin-stats.html">Sales Statistics</a>
     </nav>
   </header>
 
@@ -24,49 +26,13 @@
         <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">Scan the student's QR code to verify and fulfill.</p>
         <div id="reader"></div>
       </div>
-      
-      <div>
-        <div class="glass-panel" style="padding: 1.5rem; margin-top: 2rem; margin-bottom: 2rem;">
-          <h3 style="margin-bottom: 1rem; border-bottom: 1px solid rgba(0,0,0,0.05); padding-bottom: 0.5rem;">Add Menu Item</h3>
-          <form id="add-item-form">
-            <div class="form-group">
-              <label>Name</label>
-              <input type="text" id="new-item-name" required>
-            </div>
-            <div class="form-group">
-              <label>Image URL</label>
-              <input type="url" id="new-item-image" required placeholder="https://example.com/image.jpg">
-            </div>
-            <div style="display: flex; gap: 1rem;">
-              <div class="form-group" style="flex: 1;">
-                <label>Price (₹)</label>
-                <input type="number" id="new-item-price" required>
-              </div>
-              <div class="form-group" style="flex: 1;">
-                <label>Available</label>
-                <select id="new-item-avail" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 8px;">
-                  <option value="1">Yes</option>
-                  <option value="0">No</option>
-                </select>
-              </div>
-            </div>
-            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">Add Item</button>
-          </form>
-        </div>
 
-        <div class="glass-panel" style="padding: 1.5rem;">
-          <h3 style="margin-bottom: 1rem; border-bottom: 1px solid rgba(0,0,0,0.05); padding-bottom: 0.5rem;">Item Sales Statistics</h3>
-          <div id="item-stats" style="max-height: 400px; overflow-y: auto;">
-            <!-- Item statistics will be loaded here -->
-          </div>
-          <div id="total-revenue-stat" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 2px solid rgba(229, 57, 53, 0.2); font-size: 1.2rem; font-weight: 700; color: var(--primary-color);">
-            Total Revenue: ₹0.00
-          </div>
-        </div>
-
-        <div class="glass-panel" style="padding: 1.5rem;">
-          <h3 style="margin-bottom: 1rem; border-bottom: 1px solid rgba(0,0,0,0.05); padding-bottom: 0.5rem;">Manage Menu</h3>
-          <div id="admin-menu-list"></div>
+      <!-- Quick Stats Card -->
+      <div class="glass-panel" style="padding: 1.5rem; margin-top: 2rem; border-left: 5px solid var(--primary-color);">
+        <h4 style="margin-bottom: 0.5rem;">Admin Quick Links</h4>
+        <div style="display: flex; flex-direction: column; gap: 0.8rem; margin-top: 1rem;">
+            <a href="admin-menu.html" class="btn btn-secondary" style="font-size: 0.9rem; padding: 0.5rem;"><i class="fa-solid fa-plus"></i> Add New Items</a>
+            <a href="admin-stats.html" class="btn btn-secondary" style="font-size: 0.9rem; padding: 0.5rem;"><i class="fa-solid fa-chart-simple"></i> View Sales Data</a>
         </div>
       </div>
     </aside>
@@ -76,7 +42,7 @@
         <h2>Live Orders</h2>
         <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
           <div class="search-box" style="position: relative; flex: 1; min-width: 250px;">
-            <input type="text" id="order-search" placeholder="Search Order ID..." style="width: 100%; padding: 0.75rem 1rem; padding-left: 2.5rem; border: 1px solid #ddd; border-radius: 50px;">
+            <input type="text" id="order-search" placeholder="Search Order ID..." style="width: 100%; padding: 0.75rem 1rem; padding-left: 2.5rem; border: 2px solid var(--text-main); border-radius: var(--border-radius);">
             <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
           </div>
           <button id="clear-delivered-btn" class="btn btn-danger">Clear Delivered</button>

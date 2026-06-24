@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sales Statistics - Admin Dashboard</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+  <header>
+    <a href="admin.html" class="logo"><i class="fa-solid fa-utensils"></i> Admin Dashboard</a>
+    <nav id="admin-nav">
+      <a href="admin.html">Dashboard</a>
+      <a href="admin-menu.html">Manage Menu</a>
+      <a href="admin-stats.html" class="active">Sales Statistics</a>
+    </nav>
+  </header>
+
+  <div class="container">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+        <h2>Sales & Performance</h2>
+    </div>
+
+    <div class="glass-panel" style="padding: 2rem; max-width: 900px; margin: 0 auto;">
+        <h3 style="margin-bottom: 2rem; border-bottom: 2px solid var(--text-main); padding-bottom: 0.5rem;"><i class="fa-solid fa-chart-line"></i> Item Sales Statistics</h3>
+        <div id="item-stats" style="display: flex; flex-direction: column; gap: 1.5rem;">
+          <!-- Item statistics will be loaded here -->
+        </div>
+        
+        <div id="total-revenue-stat" style="margin-top: 3rem; padding: 2rem; border: 3px solid var(--primary-color); background: rgba(229, 57, 53, 0.05); text-align: center; font-size: 2rem; font-weight: 800; color: var(--primary-color);">
+          Total Revenue: ₹0.00
+        </div>
+    </div>
+  </div>
+
+  <script src="js/admin-stats.js"></script>
+</body>
+</html>
