@@ -18,7 +18,9 @@ const io = new Server(server, { cors: { origin: '*' } });
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecret_canteen_key';
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true,
   auth: { 
     user: process.env.EMAIL_USER, 
     pass: process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/\s+/g, '') : undefined 
@@ -65,13 +67,6 @@ app.post('/api/auth/send-otp', (req, res) => {
 
   otps.set(email.toLowerCase(), { otp, expiresAt });
 
-  const isSmtpConfigured = process.env.EMAIL_USER && process.env.EMAIL_PASS && process.env.EMAIL_PASS !== 'your_gmail_app_password';
-
-  if (!isSmtpConfigured) {
-    console.log(`[DEV MODE] OTP for ${email} is: ${otp}`);
-    return res.json({ success: true, message: 'Verification code generated. (Check server logs since SMTP is missing)' });
-  }
-
   const mailOptions = {
     from: process.env.EMAIL_USER,
     to: email,
@@ -87,8 +82,7 @@ app.post('/api/auth/send-otp', (req, res) => {
   transporter.sendMail(mailOptions, (error) => {
     if (error) {
       console.error('Send OTP Email error:', error);
-      console.log(`[DEV MODE FALLBACK] OTP for ${email} is: ${otp}`);
-      return res.json({ success: true, message: 'Verification code generated. (Check server logs since SMTP failed)' });
+      return res.status(500).json({ error: 'Failed to send verification code. Check Render logs for error details.' });
     }
     res.json({ success: true, message: 'Verification code sent to your email.' });
   });
@@ -161,13 +155,6 @@ app.post('/api/auth/forgot-password', (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
 
         const resetLink = `${req.protocol}://${req.get('host')}/reset-password.html?token=${resetToken}`;
-        const isSmtpConfigured = process.env.EMAIL_USER && process.env.EMAIL_PASS && process.env.EMAIL_PASS !== 'your_gmail_app_password';
-
-        if (!isSmtpConfigured) {
-          console.log(`[DEV MODE] Password reset link for ${email}: ${resetLink}`);
-          return res.json({ message: 'Password reset link generated. (Check server logs since SMTP is missing)' });
-        }
-
         const mailOptions = {
           from: process.env.EMAIL_USER,
           to: email,
@@ -184,8 +171,7 @@ app.post('/api/auth/forgot-password', (req, res) => {
         transporter.sendMail(mailOptions, (error) => {
           if (error) {
             console.error('Email error:', error);
-            console.log(`[DEV MODE FALLBACK] Password reset link for ${email}: ${resetLink}`);
-            return res.json({ message: 'Password reset link generated. (Check server logs since SMTP failed)' });
+            return res.status(500).json({ error: 'Failed to send reset link. Check Render logs for error details.' });
           }
           res.json({ message: 'Password reset link sent to your email.' });
         });
