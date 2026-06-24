@@ -147,7 +147,7 @@ app.post('/api/auth/forgot-password', (req, res) => {
     const expiry = new Date(Date.now() + 3600000).toISOString();
 
     db.run('UPDATE users SET reset_token = ?, reset_token_expiry = ? WHERE id = ?',
-      [resetToken, expiry, user.id], (err) => {
+      [resetToken, expiry, user.id], async (err) => {
         if (err) return res.status(500).json({ error: err.message });
 
         const resetLink = `${req.protocol}://${req.get('host')}/reset-password.html?token=${resetToken}`;
