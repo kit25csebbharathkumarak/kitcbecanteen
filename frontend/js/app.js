@@ -114,6 +114,7 @@ function renderCart() {
     cartItemsContainer.innerHTML = '<p style="color:var(--text-muted);text-align:center;margin-top:2rem;">Cart is empty</p>';
     checkoutBtn.disabled = true;
     cartTotalElement.innerText = '₹0';
+    updateCartCount();
     return;
   }
 
@@ -139,6 +140,7 @@ function renderCart() {
   cartTotalElement.innerText = `₹${total}`;
   checkoutBtn.disabled = false;
   checkoutBtn.onclick  = () => processCheckout(total);
+  updateCartCount();
 }
 
 // ─── Checkout — Razorpay Payment ───────────────────────────────────────────────
@@ -264,6 +266,37 @@ if (menuSearchInput) {
     searchQuery = e.target.value;
     renderMenu();
   });
+}
+
+// ─── Mobile Cart Handling ──────────────────────────────────────────────────
+const floatingCartBtn = document.getElementById('floating-cart-btn');
+const cartPanel = document.getElementById('cart-panel');
+const cartOverlay = document.getElementById('cart-overlay');
+const closeCartBtn = document.getElementById('close-cart-btn');
+
+if (floatingCartBtn && cartPanel && cartOverlay && closeCartBtn) {
+  floatingCartBtn.onclick = () => {
+    cartPanel.classList.add('open');
+    cartOverlay.classList.add('open');
+  };
+  
+  closeCartBtn.onclick = () => {
+    cartPanel.classList.remove('open');
+    cartOverlay.classList.remove('open');
+  };
+  
+  cartOverlay.onclick = () => {
+    cartPanel.classList.remove('open');
+    cartOverlay.classList.remove('open');
+  };
+}
+
+function updateCartCount() {
+  const countBtn = document.getElementById('floating-cart-count');
+  if (countBtn) {
+    const totalItems = Object.values(cart).reduce((acc, item) => acc + item.quantity, 0);
+    countBtn.innerText = totalItems;
+  }
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────

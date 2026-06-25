@@ -37,7 +37,8 @@
     </main>
 
     <aside>
-      <div class="cart-panel glass-panel">
+      <div class="cart-panel glass-panel" id="cart-panel">
+        <span class="close-cart-btn" id="close-cart-btn">&times;</span>
         <h3 class="cart-header"><i class="fa-solid fa-basket-shopping"></i> Your Cart</h3>
         <div class="cart-items" id="cart-items">
           <p style="color:var(--text-muted);text-align:center;margin-top:2rem;">Cart is empty</p>
@@ -55,7 +56,11 @@
 
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 
-
+  <div class="cart-overlay" id="cart-overlay"></div>
+  <button id="floating-cart-btn" class="floating-cart-btn">
+    <i class="fa-solid fa-basket-shopping"></i>
+    <span id="floating-cart-count" class="cart-badge">0</span>
+  </button>
 
   <footer style="text-align: center; margin-top: 4rem; padding: 2rem; border-top: 2px solid var(--text-main); background: #ffffff; font-size: 0.85rem; display: flex; flex-wrap: wrap; justify-content: center; gap: 1.5rem;">
     <a href="terms.html" style="color: var(--text-muted); text-decoration: none; font-weight: 500;">Terms &amp; Conditions</a>
