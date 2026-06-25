@@ -584,6 +584,23 @@ nav a.active {
   .upi-pay-btn {
     display: inline-flex !important;
   }
+  
+  header {
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem;
+  }
+  
+  nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 1rem;
+  }
+  
+  nav a {
+    margin-left: 0;
+  }
 }
 
 /* Smooth status badge transitions */
