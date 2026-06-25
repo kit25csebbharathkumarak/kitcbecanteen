@@ -9,6 +9,7 @@ const path = require('path');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const QRCode = require('qrcode');
+const Razorpay = require('razorpay');
 const db = require('./database');
 
 const app = express();
@@ -16,6 +17,11 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecret_canteen_key';
+
+const razorpayInstance = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID || 'dummy_key',
+  key_secret: process.env.RAZORPAY_KEY_SECRET || 'dummy_secret',
+});
 
 // ─── CORS + STATIC FILES ──────────────────────────────────────────────────────
 app.use(cors());
@@ -274,48 +280,72 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
     const txnRef = orderId;
     const itemsStr = JSON.stringify(items);
 
-    // 3. Save order as 'Pending Payment' — stock NOT deducted until payment confirmed
-    db.run(
-      "INSERT INTO orders (id, items, total, status, txn_ref, user_id) VALUES (?, ?, ?, 'Pending Payment', ?, ?)",
-      [orderId, itemsStr, total, txnRef, userId],
-      async (insertErr) => {
-        if (insertErr) return res.status(500).json({ error: insertErr.message });
-        return res.json({ success: true, orderId });
-      }
-    );
+    // 3. Create Razorpay Order
+    try {
+      const options = {
+        amount: total * 100, // amount in the smallest currency unit
+        currency: "INR",
+        receipt: orderId
+      };
+      const razorpayOrder = await razorpayInstance.orders.create(options);
+
+      // 4. Save order as 'Pending Payment' — stock NOT deducted until payment confirmed
+      db.run(
+        "INSERT INTO orders (id, items, total, status, txn_ref, user_id, razorpay_order_id) VALUES (?, ?, ?, 'Pending Payment', ?, ?, ?)",
+        [orderId, itemsStr, total, txnRef, userId, razorpayOrder.id],
+        async (insertErr) => {
+          if (insertErr) return res.status(500).json({ error: insertErr.message });
+          return res.json({ success: true, orderId, razorpayOrderId: razorpayOrder.id, amount: total * 100, keyId: process.env.RAZORPAY_KEY_ID });
+        }
+      );
+    } catch (err) {
+      console.error('Razorpay error:', err);
+      return res.status(500).json({ error: 'Failed to initiate payment' });
+    }
   });
 });
 
 // Razorpay Payment callback
 app.post('/api/orders/razorpay-callback', (req, res) => {
-  const { orderId, razorpay_payment_id } = req.body;
-  console.log('[Razorpay Callback] Received:', { orderId, razorpay_payment_id });
+  const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body;
+  console.log('[Razorpay Callback] Received:', { razorpay_order_id, razorpay_payment_id });
 
-  if (!orderId) {
-    return res.redirect('/orders.html?error=missing_order');
+  if (!razorpay_order_id || !razorpay_signature) {
+    return res.status(400).json({ error: 'Invalid payment details' });
   }
 
-  db.get('SELECT * FROM orders WHERE id = ?', [orderId], (err, order) => {
+  // Verify Signature
+  const body = razorpay_order_id + "|" + razorpay_payment_id;
+  const expectedSignature = crypto
+    .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET || 'dummy_secret')
+    .update(body.toString())
+    .digest("hex");
+
+  if (expectedSignature !== razorpay_signature) {
+    console.error('[Razorpay Callback] Invalid signature');
+    return res.status(400).json({ error: 'Invalid signature' });
+  }
+
+  db.get('SELECT * FROM orders WHERE razorpay_order_id = ?', [razorpay_order_id], (err, order) => {
     if (err || !order) {
-      console.error('[Razorpay Callback] Order not found:', orderId);
-      return res.redirect('/orders.html?error=order_not_found');
+      console.error('[Razorpay Callback] Order not found:', razorpay_order_id);
+      return res.status(404).json({ error: 'Order not found' });
     }
 
     if (order.status !== 'Pending Payment') {
-      console.log('[Razorpay Callback] Order already processed:', orderId, 'status:', order.status);
-      return res.redirect('/orders.html?payment=success');
+      console.log('[Razorpay Callback] Order already processed:', order.id);
+      return res.json({ success: true });
     }
 
-    const txnId = razorpay_payment_id || `RPAY_${Date.now()}`;
     const items = JSON.parse(order.items);
 
     db.run(
       "UPDATE orders SET status = 'Pending', txn_id = ?, paid_at = NOW() WHERE id = ?",
-      [txnId, orderId],
+      [razorpay_payment_id, order.id],
       (updateErr) => {
         if (updateErr) {
           console.error('[Razorpay Callback] DB Update error:', updateErr.message);
-          return res.redirect('/orders.html?error=db_error');
+          return res.status(500).json({ error: 'DB Error' });
         }
 
         items.forEach(item => {
@@ -325,12 +355,12 @@ app.post('/api/orders/razorpay-callback', (req, res) => {
             });
         });
 
-        io.emit('payment_confirmed', { orderId, txnId });
-        io.emit('new_order', { ...order, status: 'Pending', txn_id: txnId });
+        io.emit('payment_confirmed', { orderId: order.id, txnId: razorpay_payment_id });
+        io.emit('new_order', { ...order, status: 'Pending', txn_id: razorpay_payment_id });
         io.emit('menu_updated');
 
-        console.log(`[Razorpay Callback] ✅ Order ${orderId} confirmed — txnId: ${txnId}`);
-        res.redirect('/orders.html?payment=success');
+        console.log(`[Razorpay Callback] ✅ Order ${order.id} confirmed — txnId: ${razorpay_payment_id}`);
+        return res.json({ success: true, orderId: order.id });
       }
     );
   });

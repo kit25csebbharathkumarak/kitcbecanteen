@@ -23,11 +23,7 @@ const cartTotalElement  = document.getElementById('cart-total');
 const checkoutBtn       = document.getElementById('checkout-btn');
 const menuSearchInput   = document.getElementById('menu-search');
 
-const razorpayModal         = document.getElementById('razorpay-modal');
-const closeRazorpayModalBtn = document.getElementById('close-razorpay-modal');
-const razorpayAmountDisplay = document.getElementById('razorpay-amount-display');
-const razorpayOrderIdDisplay = document.getElementById('razorpay-order-id-display');
-const razorpayOrderIdInput   = document.getElementById('razorpay-order-id-input');
+
 
 // ─── Fetch & Render Menu ───────────────────────────────────────────────────────
 async function fetchMenu() {
@@ -170,19 +166,57 @@ async function processCheckout(total) {
       return;
     }
 
-    // Clear cart before showing modal
+    // Clear cart before checkout
     cart = {};
     renderCart();
 
-    if (data.orderId) {
-      // Set the hidden input and displays in modal
-      razorpayOrderIdInput.value = data.orderId;
-      razorpayOrderIdDisplay.innerText = data.orderId;
-      razorpayAmountDisplay.innerText = `₹${total}`;
-      
-      // Open the Razorpay payment modal
-      razorpayModal.classList.add('active');
-      
+    if (data.razorpayOrderId) {
+      const options = {
+        key: data.keyId,
+        amount: data.amount,
+        currency: "INR",
+        name: "Canteen Express",
+        description: "Order Payment",
+        order_id: data.razorpayOrderId,
+        handler: async function (response) {
+          try {
+            const verifyRes = await fetch(`${API_URL}/orders/razorpay-callback`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_signature: response.razorpay_signature
+              })
+            });
+            const verifyData = await verifyRes.json();
+            if (verifyData.success) {
+              window.location.href = 'orders.html?payment=success';
+            } else {
+              alert('Payment verification failed');
+            }
+          } catch (err) {
+            console.error(err);
+            alert('Error verifying payment');
+          }
+        },
+        prefill: {
+          name: user ? user.name : '',
+          email: user ? user.email : ''
+        },
+        theme: {
+          color: "#4CAF50"
+        }
+      };
+      const rzp = new Razorpay(options);
+      rzp.on('payment.failed', function (response){
+        alert(response.error.description);
+      });
+      rzp.open();
+
       checkoutBtn.disabled  = false;
       checkoutBtn.innerText = 'Proceed to Pay';
     } else {
@@ -202,13 +236,7 @@ async function processCheckout(total) {
 // Socket event for menu updates
 socket.on('menu_updated', () => fetchMenu());
 
-// ─── Close Modal ──────────────────────────────────────────────────────────────
 
-if (closeRazorpayModalBtn) {
-  closeRazorpayModalBtn.onclick = () => {
-    razorpayModal.classList.remove('active');
-  };
-}
 
 // ─── Nav Links (injected dynamically) ────────────────────────────────────────
 const nav = document.querySelector('nav');

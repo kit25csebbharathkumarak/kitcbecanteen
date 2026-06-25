@@ -53,34 +53,7 @@
     </aside>
   </div>
 
-  <!-- ═══════════════════════════════════════════════════════════════════════ -->
-  <!--  Razorpay Payment Modal                                                 -->
-  <!-- ═══════════════════════════════════════════════════════════════════════ -->
-  <div class="modal" id="razorpay-modal">
-    <div class="modal-content">
-      <span class="close-btn" id="close-razorpay-modal">&times;</span>
-      <h3><i class="fa-solid fa-credit-card" style="color: var(--primary-color);"></i> Complete Your Payment</h3>
-      <p style="margin-top: 1rem; color: var(--text-muted);">Pay securely to place your order.</p>
-      
-      <div style="font-size: 1.8rem; font-weight: 700; color: var(--text-main); margin: 1.5rem 0;">
-        <span id="razorpay-amount-display">₹0</span>
-      </div>
-      <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 2rem;">
-        Order ID: <strong id="razorpay-order-id-display" style="font-family: monospace; color: var(--text-main);"></strong>
-      </p>
-
-      <div style="display: flex; justify-content: center; align-items: center; min-height: 60px;">
-        <form id="razorpay-form" action="/api/orders/razorpay-callback" method="POST">
-          <input type="hidden" name="orderId" id="razorpay-order-id-input" value="">
-          <script src="https://checkout.razorpay.com/v1/payment-button.js" data-payment_button_id="pl_T5TM9wj2vOb5eA" async> </script>
-        </form>
-      </div>
-      
-      <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 1.5rem;">
-        Secure payment processed by Razorpay.
-      </p>
-    </div>
-  </div>
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 
 
 
