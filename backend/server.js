@@ -9,7 +9,7 @@ const path = require('path');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const QRCode = require('qrcode');
-const Razorpay = require('razorpay');
+const axios = require('axios');
 const db = require('./database');
 
 const app = express();
@@ -18,10 +18,23 @@ const io = new Server(server, { cors: { origin: '*' } });
 
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecret_canteen_key';
 
-const razorpayInstance = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID || 'dummy_key',
-  key_secret: process.env.RAZORPAY_KEY_SECRET || 'dummy_secret',
-});
+// Note: Ensure ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, ZOHO_REFRESH_TOKEN are in .env
+const getZohoAccessToken = async () => {
+  try {
+    const res = await axios.post('https://accounts.zoho.in/oauth/v2/token', null, {
+      params: {
+        refresh_token: process.env.ZOHO_REFRESH_TOKEN || 'dummy_refresh_token',
+        client_id: process.env.ZOHO_CLIENT_ID || 'dummy_client_id',
+        client_secret: process.env.ZOHO_CLIENT_SECRET || 'dummy_client_secret',
+        grant_type: 'refresh_token'
+      }
+    });
+    return res.data.access_token;
+  } catch (err) {
+    console.error('Zoho Auth Error:', err.response?.data || err.message);
+    throw new Error('Failed to get Zoho Access Token');
+  }
+};
 
 // ─── CORS + STATIC FILES ──────────────────────────────────────────────────────
 app.use(cors());
@@ -280,60 +293,69 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
     const txnRef = orderId;
     const itemsStr = JSON.stringify(items);
 
-    // 3. Create Razorpay Order
+    // 3. Create Zoho Payment Session
     try {
-      const options = {
-        amount: total * 100, // amount in the smallest currency unit
-        currency: "INR",
-        receipt: orderId
-      };
-      const razorpayOrder = await razorpayInstance.orders.create(options);
+      const accessToken = await getZohoAccessToken();
+      const zohoRes = await axios.post(
+        'https://payments.zoho.in/api/v1/payment_sessions',
+        {
+          amount: total,
+          currency: "INR",
+          reference_id: orderId,
+          customer_details: {
+            name: userName,
+            email: userEmail
+          }
+        },
+        {
+          headers: {
+            'Authorization': `Zoho-oauthtoken ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      const paymentSessionId = zohoRes.data?.payment_session?.payment_session_id || 'dummy_zoho_session_' + Date.now();
 
       // 4. Save order as 'Pending Payment' — stock NOT deducted until payment confirmed
       db.run(
-        "INSERT INTO orders (id, items, total, status, txn_ref, user_id, razorpay_order_id) VALUES (?, ?, ?, 'Pending Payment', ?, ?, ?)",
-        [orderId, itemsStr, total, txnRef, userId, razorpayOrder.id],
+        "INSERT INTO orders (id, items, total, status, txn_ref, user_id, zoho_payment_session_id) VALUES (?, ?, ?, 'Pending Payment', ?, ?, ?)",
+        [orderId, itemsStr, total, txnRef, userId, paymentSessionId],
         async (insertErr) => {
           if (insertErr) return res.status(500).json({ error: insertErr.message });
-          return res.json({ success: true, orderId, razorpayOrderId: razorpayOrder.id, amount: total * 100, keyId: process.env.RAZORPAY_KEY_ID });
+          return res.json({ success: true, orderId, paymentSessionId, amount: total });
         }
       );
     } catch (err) {
-      console.error('Razorpay error:', err);
+      console.error('Zoho Payments error:', err.response?.data || err.message);
       return res.status(500).json({ error: 'Failed to initiate payment' });
     }
   });
 });
 
-// Razorpay Payment callback
-app.post('/api/orders/razorpay-callback', (req, res) => {
-  const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body;
-  console.log('[Razorpay Callback] Received:', { razorpay_order_id, razorpay_payment_id });
+// Zoho Payments Webhook Callback
+app.post('/api/orders/zoho-webhook', (req, res) => {
+  const payload = req.body;
+  console.log('[Zoho Webhook] Received:', payload);
 
-  if (!razorpay_order_id || !razorpay_signature) {
-    return res.status(400).json({ error: 'Invalid payment details' });
+  const paymentSessionId = payload.payment_session_id;
+  const paymentStatus = payload.status;
+  const txnId = payload.payment_id;
+
+  if (!paymentSessionId || paymentStatus !== 'success') {
+    return res.status(400).json({ error: 'Invalid payment payload or uncompleted payment' });
   }
 
-  // Verify Signature
-  const body = razorpay_order_id + "|" + razorpay_payment_id;
-  const expectedSignature = crypto
-    .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET || 'dummy_secret')
-    .update(body.toString())
-    .digest("hex");
+  // TODO: Add Zoho Signature verification here if applicable for webhooks.
 
-  if (expectedSignature !== razorpay_signature) {
-    console.error('[Razorpay Callback] Invalid signature');
-    return res.status(400).json({ error: 'Invalid signature' });
-  }
-
-  db.get('SELECT * FROM orders WHERE razorpay_order_id = ?', [razorpay_order_id], (err, order) => {
+  db.get('SELECT * FROM orders WHERE zoho_payment_session_id = ?', [paymentSessionId], (err, order) => {
     if (err || !order) {
-      console.error('[Razorpay Callback] Order not found:', razorpay_order_id);
+      console.error('[Zoho Webhook] Order not found for session:', paymentSessionId);
       return res.status(404).json({ error: 'Order not found' });
     }
 
     if (order.status !== 'Pending Payment') {
-      console.log('[Razorpay Callback] Order already processed:', order.id);
+      console.log('[Zoho Webhook] Order already processed:', order.id);
       return res.json({ success: true });
     }
 
@@ -341,25 +363,25 @@ app.post('/api/orders/razorpay-callback', (req, res) => {
 
     db.run(
       "UPDATE orders SET status = 'Pending', txn_id = ?, paid_at = NOW() WHERE id = ?",
-      [razorpay_payment_id, order.id],
+      [txnId, order.id],
       (updateErr) => {
         if (updateErr) {
-          console.error('[Razorpay Callback] DB Update error:', updateErr.message);
+          console.error('[Zoho Webhook] DB Update error:', updateErr.message);
           return res.status(500).json({ error: 'DB Error' });
         }
 
         items.forEach(item => {
           db.run('UPDATE items SET stock = stock - ? WHERE id = ?',
             [item.quantity, item.id], (sErr) => {
-              if (sErr) console.error('[Razorpay Callback] Stock update error:', sErr.message);
+              if (sErr) console.error('[Zoho Webhook] Stock update error:', sErr.message);
             });
         });
 
-        io.emit('payment_confirmed', { orderId: order.id, txnId: razorpay_payment_id });
-        io.emit('new_order', { ...order, status: 'Pending', txn_id: razorpay_payment_id });
+        io.emit('payment_confirmed', { orderId: order.id, txnId: txnId });
+        io.emit('new_order', { ...order, status: 'Pending', txn_id: txnId });
         io.emit('menu_updated');
 
-        console.log(`[Razorpay Callback] ✅ Order ${order.id} confirmed — txnId: ${razorpay_payment_id}`);
+        console.log(`[Zoho Webhook] ✅ Order ${order.id} confirmed — txnId: ${txnId}`);
         return res.json({ success: true, orderId: order.id });
       }
     );

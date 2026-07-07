@@ -105,7 +105,7 @@ const initializeDatabase = async () => {
   await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS txn_ref TEXT`);
   await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS txn_id  TEXT`);
   await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP`);
-  await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS razorpay_order_id TEXT`);
+  await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS zoho_payment_session_id TEXT`);
 
   // Transactions table — for webhook idempotency
   await pool.query(`

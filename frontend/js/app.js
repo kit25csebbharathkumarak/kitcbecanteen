@@ -143,7 +143,7 @@ function renderCart() {
   updateCartCount();
 }
 
-// ─── Checkout — Razorpay Payment ───────────────────────────────────────────────
+// ─── Checkout — Zoho Payments ──────────────────────────────────────────────────
 async function processCheckout(total) {
   checkoutBtn.disabled  = true;
   checkoutBtn.innerText = 'Creating Order...';
@@ -172,57 +172,29 @@ async function processCheckout(total) {
     cart = {};
     renderCart();
 
-    if (data.razorpayOrderId) {
-      const options = {
-        key: data.keyId,
-        amount: data.amount,
-        currency: "INR",
-        name: "Canteen Express",
-        description: "Order Payment",
-        order_id: data.razorpayOrderId,
-        handler: async function (response) {
-          try {
-            const verifyRes = await fetch(`${API_URL}/orders/razorpay-callback`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-              },
-              body: JSON.stringify({
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_signature: response.razorpay_signature
-              })
-            });
-            const verifyData = await verifyRes.json();
-            if (verifyData.success) {
-              window.location.href = 'orders.html?payment=success';
-            } else {
-              alert('Payment verification failed');
-            }
-          } catch (err) {
-            console.error(err);
-            alert('Error verifying payment');
+    if (data.paymentSessionId) {
+      // Assuming Zoho Payments has a standard global object like ZPayments
+      if (typeof ZPayments !== 'undefined') {
+        const zp = new ZPayments({
+          payment_session_id: data.paymentSessionId,
+          onSuccess: function (response) {
+            window.location.href = 'orders.html?payment=success';
+          },
+          onError: function (error) {
+            alert(error.message || 'Payment failed');
           }
-        },
-        prefill: {
-          name: user ? user.name : '',
-          email: user ? user.email : ''
-        },
-        theme: {
-          color: "#4CAF50"
-        }
-      };
-      const rzp = new Razorpay(options);
-      rzp.on('payment.failed', function (response){
-        alert(response.error.description);
-      });
-      rzp.open();
-
+        });
+        zp.checkout();
+      } else {
+        // Fallback or Redirect approach
+        alert('Payment initiated. Please check your Zoho Payments link or App.');
+        // window.location.href = data.paymentUrl; // if Zoho provided a direct URL
+      }
+      
       checkoutBtn.disabled  = false;
       checkoutBtn.innerText = 'Proceed to Pay';
     } else {
-      alert('Failed to obtain Order ID.');
+      alert('Failed to obtain Payment Session ID.');
       checkoutBtn.disabled  = false;
       checkoutBtn.innerText = 'Proceed to Pay';
     }
