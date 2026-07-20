@@ -1,4 +1,4 @@
-# Canteen Express - Food Ordering System
+# SRI CUMIN SEEDS CATERING SERVICES - Food Ordering System
 
 A modern, real-time food ordering system for educational institutions with QR code verification and admin management.
 
@@ -79,7 +79,7 @@ PORT=3000
 Optional fields:
 
 ```env
-ADMIN_UPI_NAME=Canteen Express
+ADMIN_UPI_NAME=SRI CUMIN SEEDS CATERING SERVICES
 UPIGATEWAY_WEBHOOK_SECRET=your_upigateway_webhook_secret  # optional; if absent, webhook auth is not enforced
 UPIGATEWAY_WEBHOOK_HEADER=x-api-key  # optional; used only when webhook secret is configured
 ```}

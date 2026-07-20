@@ -18,15 +18,20 @@ const io = new Server(server, { cors: { origin: '*' } });
 
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecret_canteen_key';
 
-// Note: Ensure ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, ZOHO_REFRESH_TOKEN are in .env
 const getZohoAccessToken = async () => {
   try {
-    const res = await axios.post('https://accounts.zoho.in/oauth/v2/token', null, {
-      params: {
-        refresh_token: process.env.ZOHO_REFRESH_TOKEN || 'dummy_refresh_token',
-        client_id: process.env.ZOHO_CLIENT_ID || 'dummy_client_id',
-        client_secret: process.env.ZOHO_CLIENT_SECRET || 'dummy_client_secret',
-        grant_type: 'refresh_token'
+    const params = new URLSearchParams();
+    params.append('refresh_token', process.env.ZOHO_REFRESH_TOKEN || '');
+    params.append('client_id', process.env.ZOHO_CLIENT_ID || '');
+    params.append('client_secret', process.env.ZOHO_CLIENT_SECRET || '');
+    params.append('grant_type', 'refresh_token');
+
+    // Use .in or .com depending on your Zoho region (defaulting to .in)
+    const accountsUrl = process.env.ZOHO_ACCOUNTS_URL || 'https://accounts.zoho.in';
+
+    const res = await axios.post(`${accountsUrl}/oauth/v2/token`, params, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
       }
     });
     return res.data.access_token;
@@ -35,6 +40,7 @@ const getZohoAccessToken = async () => {
     throw new Error('Failed to get Zoho Access Token');
   }
 };
+
 
 // ─── CORS + STATIC FILES ──────────────────────────────────────────────────────
 app.use(cors());
@@ -80,7 +86,7 @@ app.post('/api/auth/send-otp', async (req, res) => {
     const templateParams = {
       to_email: email,
       otp: otp,
-      message: `Your One-Time Password (OTP) for Canteen Express is: ${otp}. It is valid for 5 minutes.`
+      message: `Your One-Time Password (OTP) for SRI CUMIN SEEDS CATERING SERVICES is: ${otp}. It is valid for 5 minutes.`
     };
 
     await emailjs.send(
@@ -656,5 +662,5 @@ setTimeout(() => {
 // ─── START SERVER ─────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`🚀 Canteen Express running on http://localhost:${PORT}`);
+  console.log(`🚀 SRI CUMIN SEEDS CATERING SERVICES running on http://localhost:${PORT}`);
 });
