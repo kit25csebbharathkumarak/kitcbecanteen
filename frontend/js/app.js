@@ -57,18 +57,20 @@ function renderMenu() {
       <div class="item-img-wrap">
         <img src="${item.image}" alt="${item.name}">
       </div>
-      <div class="item-info">
-        <h3>${item.name}</h3>
-        <div class="item-price">₹${item.price}</div>
-        <div style="font-size:0.85rem;color:${item.stock > 0 ? 'var(--text-muted)' : '#ff5252'};font-weight:600;margin-bottom:1rem;">
-          ${item.stock > 0 ? `In Stock: ${item.stock}` : 'Out of Stock'}
+      <div class="item-card-content">
+        <div class="item-info">
+          <h3>${item.name}</h3>
+          <div class="item-price">₹${item.price}</div>
+          <div style="font-size:0.85rem;color:${item.stock > 0 ? 'var(--text-muted)' : '#ff5252'};font-weight:600;margin-bottom:1rem;">
+            ${item.stock > 0 ? `In Stock: ${item.stock}` : 'Out of Stock'}
+          </div>
         </div>
+        <button class="btn btn-secondary btn-add"
+          onclick="addToCart(${item.id})"
+          ${item.stock <= 0 ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>
+          ${item.stock > 0 ? 'Add to Cart' : 'Sold Out'}
+        </button>
       </div>
-      <button class="btn btn-secondary btn-add"
-        onclick="addToCart(${item.id})"
-        ${item.stock <= 0 ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>
-        ${item.stock > 0 ? 'Add to Cart' : 'Sold Out'}
-      </button>
     `;
     menuGrid.appendChild(div);
   });
