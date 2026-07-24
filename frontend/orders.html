@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+  <link rel="icon" href="logo.png">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>My Orders - SRI CUMIN SEEDS CATERING SERVICES</title>
@@ -9,9 +11,11 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
+
 <body>
   <header>
-    <a href="index.html" class="logo"><img src="logo.png" alt="Logo" class="logo-img"> SRI CUMIN SEEDS CATERING SERVICES</a>
+    <a href="index.html" class="logo"><img src="logo.png" alt="Logo" class="logo-img"> SRI CUMIN SEEDS CATERING
+      SERVICES</a>
     <nav>
       <a href="menu.html">Menu</a>
       <a href="orders.html" class="active">My Orders</a>
@@ -20,8 +24,9 @@
 
   <main class="container">
     <h2 style="margin-bottom: 1rem;">My Order History</h2>
-    <p style="color: var(--text-muted); margin-bottom: 2rem;">Track your recent orders here. Click "View QR Code" to show your order code at the counter.</p>
-    
+    <p style="color: var(--text-muted); margin-bottom: 2rem;">Track your recent orders here. Click "View QR Code" to
+      show your order code at the counter.</p>
+
     <div class="orders-board" id="user-orders-board">
       <!-- Injected by JS -->
     </div>
@@ -38,13 +43,17 @@
     </div>
   </div>
 
-  <footer style="text-align: center; margin-top: 4rem; padding: 2rem; border-top: 2px solid var(--text-main); background: #ffffff; font-size: 0.85rem; display: flex; flex-wrap: wrap; justify-content: center; gap: 1.5rem;">
-    <a href="terms.html" style="color: var(--text-muted); text-decoration: none; font-weight: 500;">Terms &amp; Conditions</a>
+  <footer
+    style="text-align: center; margin-top: 4rem; padding: 2rem; border-top: 2px solid var(--text-main); background: #ffffff; font-size: 0.85rem; display: flex; flex-wrap: wrap; justify-content: center; gap: 1.5rem;">
+    <a href="terms.html" style="color: var(--text-muted); text-decoration: none; font-weight: 500;">Terms &amp;
+      Conditions</a>
     <a href="privacy.html" style="color: var(--text-muted); text-decoration: none; font-weight: 500;">Privacy Policy</a>
-    <a href="refunds.html" style="color: var(--text-muted); text-decoration: none; font-weight: 500;">Cancellation &amp; Refunds</a>
+    <a href="refunds.html" style="color: var(--text-muted); text-decoration: none; font-weight: 500;">Cancellation &amp;
+      Refunds</a>
     <a href="contact.html" style="color: var(--text-muted); text-decoration: none; font-weight: 500;">Contact Us</a>
   </footer>
 
   <script src="js/orders.js"></script>
 </body>
+
 </html>
