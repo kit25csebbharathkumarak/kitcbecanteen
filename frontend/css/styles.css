@@ -40,6 +40,22 @@ body::before {
   right: 0;
   bottom: 0;
   background: #fdfdfd;
+  z-index: -2;
+}
+
+/* Logo Watermark background */
+body::after {
+  content: '';
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 500px;
+  height: 500px;
+  background: url('../logo.png') no-repeat center center;
+  background-size: contain;
+  opacity: 0.04;
+  pointer-events: none;
   z-index: -1;
 }
 
