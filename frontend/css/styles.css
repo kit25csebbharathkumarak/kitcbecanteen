@@ -83,8 +83,9 @@ header {
   gap: 0.5rem;
 }
 
-.logo i {
-  font-size: 1.8rem;
+.logo-img {
+  height: 40px;
+  width: auto;
 }
 
 nav a {
