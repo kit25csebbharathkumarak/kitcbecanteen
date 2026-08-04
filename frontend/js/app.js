@@ -10,6 +10,8 @@ if (!token || !user) {
 let cart       = {};
 let menuItems  = [];
 let searchQuery = '';
+let currentFilter = 'all';
+let currentSort = 'default';
 
 // Current order context (used by Razorpay integration)
 let currentOrderId  = null;
@@ -40,12 +42,28 @@ async function fetchMenu() {
 
 function renderMenu() {
   menuGrid.innerHTML = '';
-  const filtered = menuItems.filter(item =>
+  
+  // 1. Filter by search query
+  let filtered = menuItems.filter(item =>
     item.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // 2. Filter by Veg/Non-Veg
+  if (currentFilter === 'veg') {
+    filtered = filtered.filter(item => item.is_veg === true || item.is_veg === 1);
+  } else if (currentFilter === 'non-veg') {
+    filtered = filtered.filter(item => item.is_veg === false || item.is_veg === 0);
+  }
+
+  // 3. Sort by Price
+  if (currentSort === 'price-asc') {
+    filtered.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
+  } else if (currentSort === 'price-desc') {
+    filtered.sort((a, b) => parseFloat(b.price) - parseFloat(a.price));
+  }
+
   if (filtered.length === 0) {
-    menuGrid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:3rem;color:var(--text-muted);">No items found matching "${searchQuery}"</div>`;
+    menuGrid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:3rem;color:var(--text-muted);">No items found matching the criteria</div>`;
     return;
   }
 
@@ -53,9 +71,16 @@ function renderMenu() {
     if (!item.available) return;
     const div = document.createElement('div');
     div.className = 'menu-item glass-panel';
+    
+    // Veg/Non-Veg indicator badge
+    const vegBadge = item.is_veg
+      ? `<span class="badge veg-badge" style="position:absolute;top:10px;right:10px;z-index:2;"><i class="fa-solid fa-leaf"></i> Veg</span>`
+      : `<span class="badge nonveg-badge" style="position:absolute;top:10px;right:10px;z-index:2;"><i class="fa-solid fa-circle" style="font-size:0.5rem;vertical-align:middle;margin-right:2px;"></i> Non-Veg</span>`;
+
     div.innerHTML = `
-      <div class="item-img-wrap">
+      <div class="item-img-wrap" style="position:relative;">
         <img src="${item.image}" alt="${item.name}">
+        ${vegBadge}
       </div>
       <div class="item-info">
         <h3>${item.name}</h3>
@@ -232,10 +257,27 @@ if (nav) {
   nav.appendChild(logoutBtn);
 }
 
-// ─── Search ───────────────────────────────────────────────────────────────────
+// ─── Search, Filter & Sort ───────────────────────────────────────────────────
 if (menuSearchInput) {
   menuSearchInput.addEventListener('input', (e) => {
     searchQuery = e.target.value;
+    renderMenu();
+  });
+}
+
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentFilter = btn.getAttribute('data-filter');
+    renderMenu();
+  });
+});
+
+const menuSortSelect = document.getElementById('menu-sort');
+if (menuSortSelect) {
+  menuSortSelect.addEventListener('change', (e) => {
+    currentSort = e.target.value;
     renderMenu();
   });
 }

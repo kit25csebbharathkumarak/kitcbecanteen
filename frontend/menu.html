@@ -23,17 +23,34 @@
 
   <div class="container menu-layout">
     <main>
-      <div
-        style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2rem;flex-wrap:wrap;gap:1rem;">
+      <div class="menu-header-bar" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2rem;flex-wrap:wrap;gap:1.5rem;width:100%;">
         <div>
           <h2>Today's Menu</h2>
           <p style="color:var(--text-muted);">Freshly prepared for you.</p>
         </div>
-        <div class="search-box" style="position:relative;min-width:300px;">
-          <input type="text" id="menu-search" placeholder="Search for food..."
-            style="width:100%;padding:0.75rem 1rem;padding-left:2.5rem;border:2px solid var(--text-main);border-radius:30px;font-family:inherit;">
-          <i class="fa-solid fa-magnifying-glass"
-            style="position:absolute;left:1rem;top:50%;transform:translateY(-50%);color:var(--text-muted);"></i>
+        <div class="controls-container" style="display:flex;gap:1rem;flex-grow:1;max-width:850px;justify-content:flex-end;align-items:center;flex-wrap:wrap;">
+          <!-- Search Box -->
+          <div class="search-box" style="position:relative;flex-grow:2;max-width:400px;min-width:260px;">
+            <input type="text" id="menu-search" placeholder="Search for food..."
+              style="width:100%;padding:0.75rem 1rem;padding-left:2.5rem;border:2px solid var(--text-main);border-radius:30px;font-family:inherit;">
+            <i class="fa-solid fa-magnifying-glass"
+              style="position:absolute;left:1rem;top:50%;transform:translateY(-50%);color:var(--text-muted);"></i>
+          </div>
+          <!-- Filter by Veg/Non-Veg -->
+          <div class="filter-group" style="display:flex;border:2px solid var(--text-main);border-radius:30px;overflow:hidden;background:#fff;height:46px;align-items:center;">
+            <button class="filter-btn active" data-filter="all">All</button>
+            <button class="filter-btn" data-filter="veg" style="border-left:2px solid var(--text-main);color:#27ae60;"><i class="fa-solid fa-leaf"></i> Veg</button>
+            <button class="filter-btn" data-filter="non-veg" style="border-left:2px solid var(--text-main);color:#c0392b;"><i class="fa-solid fa-circle" style="font-size:0.5rem;vertical-align:middle;margin-right:2px;"></i> Non-Veg</button>
+          </div>
+          <!-- Sort by Price -->
+          <div class="sort-group" style="position:relative;">
+            <select id="menu-sort" style="height:46px;padding:0 2.5rem 0 1.5rem;border:2px solid var(--text-main);border-radius:30px;font-family:inherit;font-weight:600;background:#fff;cursor:pointer;outline:none;appearance:none;-webkit-appearance:none;">
+              <option value="default">Sort by: Default</option>
+              <option value="price-asc">Price: Low to High</option>
+              <option value="price-desc">Price: High to Low</option>
+            </select>
+            <i class="fa-solid fa-chevron-down" style="position:absolute;right:1rem;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--text-muted);"></i>
+          </div>
         </div>
       </div>
       <div class="items-grid" id="menu-grid">

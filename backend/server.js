@@ -232,10 +232,10 @@ app.get('/api/items', authenticateToken, (req, res) => {
 });
 
 app.post('/api/items', requireAdmin, (req, res) => {
-  const { name, price, image, available, stock } = req.body;
+  const { name, price, image, available, stock, is_veg } = req.body;
   db.run(
-    'INSERT INTO items (name, price, image, available, stock) VALUES (?, ?, ?, ?, ?) RETURNING id',
-    [name, price, image, available === undefined ? 1 : available, stock || 0],
+    'INSERT INTO items (name, price, image, available, stock, is_veg) VALUES (?, ?, ?, ?, ?, ?) RETURNING id',
+    [name, price, image, available === undefined ? true : !!available, stock || 0, is_veg === undefined ? true : !!is_veg],
     function (err, info) {
       if (err) return res.status(500).json({ error: err.message });
       io.emit('menu_updated');
@@ -245,11 +245,11 @@ app.post('/api/items', requireAdmin, (req, res) => {
 });
 
 app.put('/api/items/:id', requireAdmin, (req, res) => {
-  const { name, price, image, available, stock } = req.body;
+  const { name, price, image, available, stock, is_veg } = req.body;
   const { id } = req.params;
   db.run(
-    'UPDATE items SET name=?, price=?, image=?, available=?, stock=? WHERE id=?',
-    [name, price, image, available ? 1 : 0, stock || 0, id],
+    'UPDATE items SET name=?, price=?, image=?, available=?, stock=?, is_veg=? WHERE id=?',
+    [name, price, image, available === undefined ? true : !!available, stock || 0, is_veg === undefined ? true : !!is_veg, id],
     function (err, info) {
       if (err) return res.status(500).json({ error: err.message });
       io.emit('menu_updated');

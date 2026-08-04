@@ -69,7 +69,7 @@ function renderOrders() {
   if (orders.length === 0) {
     userOrdersBoard.innerHTML = `
       <div style="text-align:center;padding:3rem;color:var(--text-muted);">
-        <i class="fa-solid fa-bowl-food" style="font-size:2.5rem;margin-bottom:1rem;display:block;"></i>
+        <img src="logo.png" alt="Logo" style="height:80px; margin-bottom:1.5rem; filter: grayscale(0.2); opacity: 0.8; display:block; margin-left:auto; margin-right:auto;">
         You have no orders yet.
       </div>`;
     return;

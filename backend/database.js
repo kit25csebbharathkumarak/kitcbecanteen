@@ -50,11 +50,11 @@ const db = {
 
 // ─── DEFAULT SEED DATA ────────────────────────────────────────────────────────
 const defaultItems = [
-  ['Empty Biryani',   20,  'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=500&q=80', 50],
-  ['Chicken Biryani', 110, 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?auto=format&fit=crop&w=500&q=80', 30],
-  ['Curd Rice',        30, 'https://images.unsplash.com/photo-1576107232684-1279f3908594?auto=format&fit=crop&w=500&q=80', 100],
-  ['Parota Set',       30, 'https://images.unsplash.com/photo-1461023058943-07fcbe16d735?auto=format&fit=crop&w=500&q=80', 40],
-  ['Chicken Rice',    110, 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?auto=format&fit=crop&w=500&q=80', 25],
+  ['Empty Biryani',   20,  'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=500&q=80', 50, true],
+  ['Chicken Biryani', 110, 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?auto=format&fit=crop&w=500&q=80', 30, false],
+  ['Curd Rice',        30, 'https://images.unsplash.com/photo-1576107232684-1279f3908594?auto=format&fit=crop&w=500&q=80', 100, true],
+  ['Parota Set',       30, 'https://images.unsplash.com/photo-1461023058943-07fcbe16d735?auto=format&fit=crop&w=500&q=80', 40, true],
+  ['Chicken Rice',    110, 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?auto=format&fit=crop&w=500&q=80', 25, false],
 ];
 
 // ─── DATABASE INITIALISATION ──────────────────────────────────────────────────
@@ -83,6 +83,12 @@ const initializeDatabase = async () => {
       stock     INTEGER DEFAULT 0
     )
   `);
+
+  // Add new columns to items table if they don't exist yet
+  await pool.query(`ALTER TABLE items ADD COLUMN IF NOT EXISTS is_veg BOOLEAN DEFAULT TRUE`);
+
+  // Update existing database rows to mark non-veg items based on their names
+  await pool.query("UPDATE items SET is_veg = FALSE WHERE name ILIKE '%chicken%' OR name ILIKE '%fish%' OR name ILIKE '%egg%' OR name ILIKE '%mutton%' OR name ILIKE '%meat%'");
 
   // Orders table
   await pool.query(`
@@ -123,7 +129,7 @@ const initializeDatabase = async () => {
   if (parseInt(itemsCount.rows[0].count, 10) === 0) {
     for (const item of defaultItems) {
       await pool.query(
-        'INSERT INTO items (name, price, image, stock) VALUES ($1, $2, $3, $4)',
+        'INSERT INTO items (name, price, image, stock, is_veg) VALUES ($1, $2, $3, $4, $5)',
         item
       );
     }

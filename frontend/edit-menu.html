@@ -44,12 +44,21 @@
           <input type="url" id="item-image" required placeholder="https://example.com/image.jpg">
         </div>
 
-        <div class="form-group">
-          <label for="item-available">Available</label>
-          <select id="item-available">
-            <option value="1">Yes</option>
-            <option value="0">No</option>
-          </select>
+        <div style="display: flex; gap: 1rem;">
+          <div class="form-group" style="flex: 1;">
+            <label for="item-available">Available</label>
+            <select id="item-available">
+              <option value="1">Yes</option>
+              <option value="0">No</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label for="item-veg">Dietary Type</label>
+            <select id="item-veg" style="width: 100%; padding: 0.75rem; border: 2px solid var(--text-main); border-radius: var(--border-radius); font-family: inherit;">
+              <option value="1">Veg</option>
+              <option value="0">Non-Veg</option>
+            </select>
+          </div>
         </div>
 
         <div style="display: flex; gap: 1rem; margin-top: 2rem;">
@@ -97,6 +106,7 @@
         document.getElementById('item-stock').value = item.stock;
         document.getElementById('item-image').value = item.image;
         document.getElementById('item-available').value = item.available ? '1' : '0';
+        document.getElementById('item-veg').value = item.is_veg ? '1' : '0';
       } catch (err) {
         console.error(err);
         alert('Error loading item details');
@@ -112,7 +122,8 @@
       const stock = parseInt(document.getElementById('item-stock').value);
       const image = document.getElementById('item-image').value;
       const available = document.getElementById('item-available').value === '1';
-
+      const is_veg = document.getElementById('item-veg').value === '1';
+      
       try {
         const res = await fetch(`${API_URL}/items/${itemId}`, {
           method: 'PUT',
@@ -120,7 +131,7 @@
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({ name, price, image, available, stock })
+          body: JSON.stringify({ name, price, image, available, stock, is_veg })
         });
 
         if (res.ok) {

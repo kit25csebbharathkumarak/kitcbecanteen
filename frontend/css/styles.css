@@ -189,6 +189,8 @@ nav a.active {
   max-width: 1400px;
   margin: 0 auto;
   padding: 2rem 4%;
+  flex: 1;
+  width: 100%;
 }
 
 .menu-layout {
@@ -443,6 +445,8 @@ nav a.active {
   grid-template-columns: 350px 1fr;
   gap: 2rem;
   padding: 2rem 5%;
+  flex: 1;
+  width: 100%;
 }
 
 .scanner-section {
@@ -548,6 +552,7 @@ nav a.active {
   align-items: center;
   justify-content: center;
   padding: 2rem;
+  width: 100%;
 }
 
 .auth-box {
@@ -746,4 +751,38 @@ nav a.active {
     color: var(--text-muted);
     line-height: 1;
   }
+}
+
+/* Dietary Filter and Badge Styles */
+.filter-btn {
+  border: none;
+  background: none;
+  padding: 0 1.2rem;
+  cursor: pointer;
+  font-weight: 600;
+  font-family: inherit;
+  transition: var(--transition);
+  color: var(--text-main);
+  height: 100%;
+}
+
+.filter-btn:hover {
+  background: var(--bg-color);
+}
+
+.filter-btn.active {
+  background: var(--text-main) !important;
+  color: #ffffff !important;
+}
+
+.veg-badge {
+  background: #e8f5e9 !important;
+  color: #2e7d32 !important;
+  border-color: #2e7d32 !important;
+}
+
+.nonveg-badge {
+  background: #ffebee !important;
+  color: #c62828 !important;
+  border-color: #c62828 !important;
 }

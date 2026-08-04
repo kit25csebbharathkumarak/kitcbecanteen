@@ -38,11 +38,15 @@ function renderAdminMenu(items) {
     div.style.justifyContent = 'space-between';
     div.style.alignItems = 'center';
     
+    const vegIndicator = item.is_veg
+      ? `<span style="color:#27ae60;font-weight:bold;margin-right:0.5rem;"><i class="fa-solid fa-leaf"></i> Veg</span>`
+      : `<span style="color:#c0392b;font-weight:bold;margin-right:0.5rem;"><i class="fa-solid fa-circle" style="font-size:0.6rem;vertical-align:middle;"></i> Non-Veg</span>`;
+
     div.innerHTML = `
       <div>
         <div style="font-weight: 700; font-size: 1.1rem;">${item.name}</div>
         <div style="font-size: 0.9rem; color: var(--text-muted); margin-top: 0.2rem;">
-          Price: ₹${item.price} | Stock: <strong>${item.stock}</strong> | 
+          ${vegIndicator} | Price: ₹${item.price} | Stock: <strong>${item.stock}</strong> | 
           Status: <span class="badge ${item.available ? (item.stock > 0 ? 'delivered' : 'pending') : 'pending'}" style="padding: 0.1rem 0.4rem; font-size: 0.7rem;">
             ${item.available ? (item.stock > 0 ? 'Available' : 'Out of Stock') : 'Hidden'}
           </span>
@@ -88,6 +92,7 @@ addItemForm.addEventListener('submit', async (e) => {
   const stock = parseInt(document.getElementById('new-item-stock').value);
   const image = document.getElementById('new-item-image').value;
   const available = document.getElementById('new-item-avail').value === '1';
+  const is_veg = document.getElementById('new-item-veg').value === '1';
 
   try {
     const res = await fetch(`${API_URL}/items`, {
@@ -96,7 +101,7 @@ addItemForm.addEventListener('submit', async (e) => {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify({ name, price, image, available, stock })
+      body: JSON.stringify({ name, price, image, available, stock, is_veg })
     });
 
     if (res.ok) {
