@@ -410,7 +410,7 @@ app.post('/api/orders/zoho-webhook', (req, res) => {
     const items = JSON.parse(order.items);
 
     db.run(
-      "UPDATE orders SET status = 'Pending', txn_id = ?, paid_at = NOW() WHERE id = ?",
+      "UPDATE orders SET status = 'Pending', txn_id = ?, paid_at = CURRENT_TIMESTAMP WHERE id = ?",
       [txnId, order.id],
       (updateErr) => {
         if (updateErr) {
@@ -446,7 +446,7 @@ app.post('/api/orders/verify-zoho-payment', (req, res) => {
     if (order.status !== 'Pending Payment') return res.json({ success: true, alreadyProcessed: true });
 
     const items = JSON.parse(order.items);
-    db.run("UPDATE orders SET status = 'Pending', paid_at = NOW() WHERE id = ?", [order.id], (updateErr) => {
+    db.run("UPDATE orders SET status = 'Pending', paid_at = CURRENT_TIMESTAMP WHERE id = ?", [order.id], (updateErr) => {
       if (updateErr) return res.status(500).json({ error: 'DB Error' });
       items.forEach(item => {
         db.run('UPDATE items SET stock = stock - ? WHERE id = ?', [item.quantity, item.id]);
