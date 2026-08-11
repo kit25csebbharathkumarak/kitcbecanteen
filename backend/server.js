@@ -328,7 +328,7 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
         }
       );
       
-      const paymentSessionId = zohoRes.data?.payment_session?.payment_session_id || 'dummy_zoho_session_' + Date.now();
+      const paymentSessionId = zohoRes.data?.payments_session?.payments_session_id || 'dummy_zoho_session_' + Date.now();
 
       // 4. Save order as 'Pending Payment' — stock NOT deducted until payment confirmed
       db.run(
