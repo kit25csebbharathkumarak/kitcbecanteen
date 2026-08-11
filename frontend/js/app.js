@@ -226,14 +226,30 @@ async function processCheckout(total) {
           "description": "Order " + data.orderId
         };
 
+        let widgetPromise;
         if (typeof zp.open === 'function') {
-           zp.open(options);
+           widgetPromise = zp.open(options);
         } else if (typeof zp.requestPaymentMethod === 'function') {
-           zp.requestPaymentMethod(options);
+           widgetPromise = zp.requestPaymentMethod(options);
         } else if (typeof zp.checkout === 'function') {
-           zp.checkout(options);
+           widgetPromise = zp.checkout(options);
         } else {
            alert('Checkout Error: Unable to find payment method on Zoho widget. Methods available: ' + Object.keys(zp).join(', '));
+           return;
+        }
+
+        try {
+           let response = await widgetPromise;
+           // If the widget resolves successfully, we redirect. 
+           // The webhook will update the backend DB status in the background.
+           if (response) {
+               window.location.href = 'orders.html?payment=success';
+           }
+        } catch (widgetErr) {
+           if (widgetErr && widgetErr.code !== 'widget_closed') {
+               console.error("Widget Error:", widgetErr);
+               alert("Payment failed: " + (widgetErr.message || JSON.stringify(widgetErr)));
+           }
         }
       } else {
         alert('Payment initiated. Please check your Zoho Payments App.');
