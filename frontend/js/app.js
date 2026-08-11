@@ -240,9 +240,16 @@ async function processCheckout(total) {
 
         try {
            let response = await widgetPromise;
-           // If the widget resolves successfully, we redirect. 
-           // The webhook will update the backend DB status in the background.
            if (response) {
+               // Fallback: forcefully verify with backend in case webhook is delayed or fails
+               try {
+                   await fetch(`${API_URL}/orders/verify-zoho-payment`, {
+                       method: 'POST',
+                       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                       body: JSON.stringify({ orderId: data.orderId, paymentSessionId: data.paymentSessionId })
+                   });
+               } catch(e) { console.error('Fallback verify failed:', e); }
+
                window.location.href = 'orders.html?payment=success';
            }
         } catch (widgetErr) {

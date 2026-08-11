@@ -385,12 +385,14 @@ app.post('/api/orders/zoho-webhook', (req, res) => {
   }
 
   // Also check if status is part of event_name
-  if (!paymentStatus && payload.event_name === 'payment.succeeded') {
+  if (payload.event_name === 'payment.succeeded') {
      paymentStatus = 'success';
   }
 
-  if (!paymentSessionId || paymentStatus !== 'success') {
-    return res.status(400).json({ error: 'Invalid payment payload or uncompleted payment' });
+  const validStatuses = ['success', 'completed', 'succeeded', 'paid', 'approved'];
+  if (!paymentSessionId || !validStatuses.includes(String(paymentStatus).toLowerCase())) {
+    console.error('[Zoho Webhook] Invalid payload or uncompleted payment:', { paymentSessionId, paymentStatus, payload });
+    return res.status(400).json({ error: 'Invalid payment payload or uncompleted payment', receivedStatus: paymentStatus });
   }
 
 
@@ -431,6 +433,29 @@ app.post('/api/orders/zoho-webhook', (req, res) => {
         return res.json({ success: true, orderId: order.id });
       }
     );
+  });
+});
+
+// Fallback Verification Endpoint
+app.post('/api/orders/verify-zoho-payment', (req, res) => {
+  const { paymentSessionId, orderId } = req.body;
+  if (!paymentSessionId) return res.status(400).json({ error: 'Missing session ID' });
+
+  db.get('SELECT * FROM orders WHERE id = ? AND zoho_payment_session_id = ?', [orderId, paymentSessionId], (err, order) => {
+    if (err || !order) return res.status(404).json({ error: 'Order not found' });
+    if (order.status !== 'Pending Payment') return res.json({ success: true, alreadyProcessed: true });
+
+    const items = JSON.parse(order.items);
+    db.run("UPDATE orders SET status = 'Pending', paid_at = NOW() WHERE id = ?", [order.id], (updateErr) => {
+      if (updateErr) return res.status(500).json({ error: 'DB Error' });
+      items.forEach(item => {
+        db.run('UPDATE items SET stock = stock - ? WHERE id = ?', [item.quantity, item.id]);
+      });
+      io.emit('payment_confirmed', { orderId: order.id });
+      io.emit('new_order', { ...order, status: 'Pending' });
+      io.emit('menu_updated');
+      res.json({ success: true });
+    });
   });
 });
 
