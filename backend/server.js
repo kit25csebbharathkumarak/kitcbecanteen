@@ -47,7 +47,11 @@ app.use(cors());
 app.use(express.static(path.join(__dirname, '../frontend')));
 
 // ─── GLOBAL JSON PARSER ──────────────────────────────────────────────────────
-app.use(express.json());
+app.use(express.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 app.use(express.urlencoded({ extended: true }));
 
 // ─── AUTH MIDDLEWARE ──────────────────────────────────────────────────────────
@@ -267,6 +271,14 @@ app.delete('/api/items/:id', requireAdmin, (req, res) => {
   });
 });
 
+// ─── ZOHO CONFIG ROUTE ────────────────────────────────────────────────────────
+app.get('/api/zoho-config', (req, res) => {
+  res.json({
+    api_key: process.env.ZOHO_API_KEY || '',
+    account_id: process.env.ZOHO_ACCOUNT_ID || ''
+  });
+});
+
 // ─── ORDER ROUTES ─────────────────────────────────────────────────────────────
 
 // Create order — calls BS Solutions Gateway for payment link
@@ -344,6 +356,31 @@ app.post('/api/orders/zoho-webhook', (req, res) => {
   const payload = req.body;
   console.log('[Zoho Webhook] Received:', payload);
 
+  const signingKey = process.env.ZOHO_SIGNING_KEY;
+  const signatureHeader = req.headers['x-zoho-webhook-signature'];
+
+  if (signingKey && signatureHeader && req.rawBody) {
+    try {
+      const parts = signatureHeader.split(',');
+      const t = parts[0].split('=')[1];
+      const v = parts[1].split('=')[1];
+
+      const data = `${t}.${req.rawBody.toString()}`;
+      const expectedSignature = crypto
+        .createHmac('sha256', signingKey)
+        .update(data)
+        .digest('hex');
+
+      if (!crypto.timingSafeEqual(Buffer.from(v), Buffer.from(expectedSignature))) {
+        console.error('[Zoho Webhook] Invalid signature');
+        return res.status(401).json({ error: 'Invalid signature' });
+      }
+    } catch (err) {
+      console.error('[Zoho Webhook] Signature verification error:', err);
+      return res.status(401).json({ error: 'Signature verification error' });
+    }
+  }
+
   const paymentSessionId = payload.payment_session_id;
   const paymentStatus = payload.status;
   const txnId = payload.payment_id;
@@ -352,7 +389,6 @@ app.post('/api/orders/zoho-webhook', (req, res) => {
     return res.status(400).json({ error: 'Invalid payment payload or uncompleted payment' });
   }
 
-  // TODO: Add Zoho Signature verification here if applicable for webhooks.
 
   db.get('SELECT * FROM orders WHERE zoho_payment_session_id = ?', [paymentSessionId], (err, order) => {
     if (err || !order) {

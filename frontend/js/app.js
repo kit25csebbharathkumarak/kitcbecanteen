@@ -198,22 +198,35 @@ async function processCheckout(total) {
     renderCart();
 
     if (data.paymentSessionId) {
-      // Assuming Zoho Payments has a standard global object like ZPayments
       if (typeof ZPayments !== 'undefined') {
-        const zp = new ZPayments({
-          payment_session_id: data.paymentSessionId,
-          onSuccess: function (response) {
-            window.location.href = 'orders.html?payment=success';
-          },
-          onError: function (error) {
-            alert(error.message || 'Payment failed');
+        const configRes = await fetch(`${API_URL}/zoho-config`);
+        const configData = await configRes.json();
+
+        let config = {
+          "account_id": configData.account_id,
+          "domain": "IN",
+          "otherOptions": {
+            "api_key": configData.api_key
           }
+        };
+
+        const zp = new ZPayments(config);
+        
+        // Wait for webhook to confirm via socket or navigate when the modal is closed
+        socket.once('payment_confirmed', (msg) => {
+           if (msg.orderId === data.orderId) {
+               window.location.href = 'orders.html?payment=success';
+           }
         });
-        zp.checkout();
+
+        zp.open({
+          "amount": total.toString(),
+          "currency_code": "INR",
+          "payments_session_id": data.paymentSessionId,
+          "description": "Order " + data.orderId
+        });
       } else {
-        // Fallback or Redirect approach
-        alert('Payment initiated. Please check your Zoho Payments link or App.');
-        // window.location.href = data.paymentUrl; // if Zoho provided a direct URL
+        alert('Payment initiated. Please check your Zoho Payments App.');
       }
       
       checkoutBtn.disabled  = false;
