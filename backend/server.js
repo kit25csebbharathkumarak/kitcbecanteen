@@ -318,12 +318,7 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
         `https://payments.zoho.in/api/v1/payment_sessions?account_id=${process.env.ZOHO_ACCOUNT_ID}`,
         {
           amount: total,
-          currency: "INR",
-          reference_id: orderId,
-          customer_details: {
-            name: userName,
-            email: userEmail
-          }
+          currency: "INR"
         },
         {
           headers: {
