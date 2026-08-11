@@ -315,7 +315,7 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
     try {
       const accessToken = await getZohoAccessToken();
       const zohoRes = await axios.post(
-        `https://payments.zoho.in/api/v1/payment_sessions?account_id=${process.env.ZOHO_ACCOUNT_ID}`,
+        `https://payments.zoho.in/api/v1/paymentsessions?account_id=${process.env.ZOHO_ACCOUNT_ID}`,
         {
           amount: total,
           currency: "INR"
