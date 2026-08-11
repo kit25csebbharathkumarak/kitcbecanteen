@@ -219,12 +219,22 @@ async function processCheckout(total) {
            }
         });
 
-        zp.open({
+        let options = {
           "amount": total.toString(),
           "currency_code": "INR",
           "payments_session_id": data.paymentSessionId,
           "description": "Order " + data.orderId
-        });
+        };
+
+        if (typeof zp.open === 'function') {
+           zp.open(options);
+        } else if (typeof zp.requestPaymentMethod === 'function') {
+           zp.requestPaymentMethod(options);
+        } else if (typeof zp.checkout === 'function') {
+           zp.checkout(options);
+        } else {
+           alert('Checkout Error: Unable to find payment method on Zoho widget. Methods available: ' + Object.keys(zp).join(', '));
+        }
       } else {
         alert('Payment initiated. Please check your Zoho Payments App.');
       }
@@ -239,7 +249,7 @@ async function processCheckout(total) {
 
   } catch (err) {
     console.error(err);
-    alert('An error occurred. Please try again.');
+    alert('Checkout Error: ' + (err.message || JSON.stringify(err)));
     checkoutBtn.disabled  = false;
     checkoutBtn.innerText = 'Proceed to Pay';
   }
