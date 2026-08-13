@@ -12,6 +12,19 @@
 </head>
 
 <body>
+  <div class="parotta-loader-wrapper" id="parotta-loader">
+    <img src="parotta.png" alt="Loading..." class="spinning-parotta">
+    <div class="loader-text">Cooking...</div>
+  </div>
+  <script>
+    window.addEventListener('load', () => {
+      const loader = document.getElementById('parotta-loader');
+      if (loader) {
+        loader.classList.add('hidden');
+        setTimeout(() => loader.remove(), 500);
+      }
+    });
+  </script>
     <header>
         <a href="admin.html" class="logo"><img src="logo.png" alt="Logo" class="logo-img"> Admin Dashboard</a>
         <nav id="admin-nav">

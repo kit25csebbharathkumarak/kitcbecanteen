@@ -786,3 +786,51 @@ nav a.active {
   color: #c62828 !important;
   border-color: #c62828 !important;
 }
+/* Parotta Loader */
+.parotta-loader-wrapper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: var(--bg-color);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  transition: opacity 0.5s ease;
+}
+
+.parotta-loader-wrapper.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.spinning-parotta {
+  width: 120px;
+  height: 120px;
+  animation: spin-parotta 1.5s linear infinite;
+  filter: drop-shadow(0px 10px 15px rgba(0,0,0,0.2));
+  margin-bottom: 1.5rem;
+  border-radius: 50%;
+}
+
+@keyframes spin-parotta {
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.1); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+.loader-text {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--primary-color);
+  letter-spacing: 1px;
+  animation: pulse-text 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-text {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}

@@ -603,13 +603,85 @@ app.post('/api/orders/:id/confirm-payment', requireAdmin, (req, res) => {
   });
 });
 
+// ─── ZOHO PAYMENT SYNC HELPERS ─────────────────────────────────────────────────
+async function checkZohoPaymentStatus(paymentSessionId) {
+  try {
+    const accessToken = await getZohoAccessToken();
+    const accountId = process.env.ZOHO_ACCOUNT_ID;
+    const res = await axios.get(
+      `https://payments.zoho.in/api/v1/paymentsessions/${paymentSessionId}?account_id=${accountId}`,
+      {
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${accessToken}`
+        }
+      }
+    );
+    return res.data;
+  } catch (err) {
+    console.error('Error fetching Zoho payment session:', err.response?.data || err.message);
+    return null;
+  }
+}
+
+async function syncOrderIfPending(order) {
+  if (order.status !== 'Pending Payment' || !order.zoho_payment_session_id) return order;
+
+  const data = await checkZohoPaymentStatus(order.zoho_payment_session_id);
+  if (!data) return order;
+
+  let session = data.payments_session || data;
+  let paymentStatus = session.status;
+  let txnId = session.payment_id || session.txn_id || session.transaction_id || `SYNC_${Date.now()}`;
+  
+  if (session.payment && session.payment.status) {
+      paymentStatus = session.payment.status;
+      txnId = session.payment.payment_id || txnId;
+  }
+
+  const validStatuses = ['success', 'completed', 'succeeded', 'paid', 'approved'];
+  if (validStatuses.includes(String(paymentStatus).toLowerCase())) {
+     return new Promise((resolve) => {
+         db.run(
+           "UPDATE orders SET status = 'Pending', txn_id = ?, paid_at = CURRENT_TIMESTAMP WHERE id = ?",
+           [txnId, order.id],
+           (err) => {
+               if (err) return resolve(order);
+               
+               const items = JSON.parse(order.items);
+               items.forEach(item => {
+                 db.run('UPDATE items SET stock = stock - ? WHERE id = ?', [item.quantity, item.id]);
+               });
+               
+               io.emit('payment_confirmed', { orderId: order.id, txnId: txnId });
+               io.emit('new_order', { ...order, status: 'Pending', txn_id: txnId });
+               io.emit('menu_updated');
+
+               console.log(`[Sync] ✅ Order ${order.id} confirmed via sync — txnId: ${txnId}`);
+               order.status = 'Pending';
+               order.txn_id = txnId;
+               resolve(order);
+           }
+         );
+     });
+  } else if (String(paymentStatus).toLowerCase() === 'failed') {
+     return new Promise((resolve) => {
+         db.run("UPDATE orders SET status = 'Failed' WHERE id = ?", [order.id], () => {
+             order.status = 'Failed';
+             resolve(order);
+         });
+     });
+  }
+  return order;
+}
+
 // Poll order status (student polling while waiting on QR modal)
 app.get('/api/orders/status/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
-  db.get('SELECT status FROM orders WHERE id = ?', [id], (err, row) => {
+  db.get('SELECT * FROM orders WHERE id = ?', [id], async (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!row) return res.status(404).json({ error: 'Order not found' });
-    res.json({ status: row.status });
+    const syncedRow = await syncOrderIfPending(row);
+    res.json({ status: syncedRow.status });
   });
 });
 
@@ -618,9 +690,11 @@ app.get('/api/orders/me', authenticateToken, (req, res) => {
   db.all(
     'SELECT orders.*, users.name AS user_name FROM orders JOIN users ON orders.user_id = users.id WHERE user_id = ? ORDER BY created_at DESC',
     [req.user.id],
-    (err, rows) => {
+    async (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
-      res.json(rows);
+      const syncedRows = await Promise.all(rows.map(row => syncOrderIfPending(row)));
+      const finalRows = syncedRows.filter(row => row.status !== 'Pending Payment');
+      res.json(finalRows);
     }
   );
 });
@@ -630,9 +704,11 @@ app.get('/api/orders', requireAdmin, (req, res) => {
   db.all(
     'SELECT orders.*, users.name AS user_name FROM orders JOIN users ON orders.user_id = users.id ORDER BY created_at DESC',
     [],
-    (err, rows) => {
+    async (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
-      res.json(rows);
+      const syncedRows = await Promise.all(rows.map(row => syncOrderIfPending(row)));
+      const finalRows = syncedRows.filter(row => row.status !== 'Pending Payment');
+      res.json(finalRows);
     }
   );
 });
@@ -662,10 +738,11 @@ app.get('/api/orders/:id', requireAdmin, (req, res) => {
   db.get(
     'SELECT orders.*, users.name AS user_name FROM orders JOIN users ON orders.user_id = users.id WHERE orders.id=?',
     [id],
-    (err, row) => {
+    async (err, row) => {
       if (err) return res.status(500).json({ error: err.message });
       if (!row) return res.status(404).json({ error: 'Order not found' });
-      res.json(row);
+      const syncedRow = await syncOrderIfPending(row);
+      res.json(syncedRow);
     }
   );
 });
