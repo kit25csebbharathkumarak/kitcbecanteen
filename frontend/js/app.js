@@ -7,7 +7,7 @@ if (!token || !user) {
   window.location.href = 'login.html';
 }
 
-let cart       = {};
+let cart       = JSON.parse(localStorage.getItem('canteen_cart') || '{}');
 let menuItems  = [];
 let searchQuery = '';
 let currentFilter = 'all';
@@ -140,8 +140,11 @@ function renderCart() {
     checkoutBtn.disabled = true;
     cartTotalElement.innerText = '₹0';
     updateCartCount();
+    localStorage.removeItem('canteen_cart');
     return;
   }
+
+  localStorage.setItem('canteen_cart', JSON.stringify(cart));
 
   keys.forEach(id => {
     const item = cart[id];
@@ -193,9 +196,8 @@ async function processCheckout(total) {
       return;
     }
 
-    // Clear cart before checkout
-    cart = {};
-    renderCart();
+    // Cart is preserved here in case they cancel/go back. 
+    // It will be cleared upon successful payment.
 
     if (data.paymentSessionId) {
       if (typeof ZPayments !== 'undefined') {
@@ -215,6 +217,7 @@ async function processCheckout(total) {
         // Wait for webhook to confirm via socket or navigate when the modal is closed
         socket.once('payment_confirmed', (msg) => {
            if (msg.orderId === data.orderId) {
+               localStorage.removeItem('canteen_cart');
                window.location.href = 'orders.html?payment=success';
            }
         });
@@ -250,6 +253,7 @@ async function processCheckout(total) {
                    });
                } catch(e) { console.error('Fallback verify failed:', e); }
 
+               localStorage.removeItem('canteen_cart');
                window.location.href = 'orders.html?payment=success';
            }
         } catch (widgetErr) {
@@ -257,6 +261,8 @@ async function processCheckout(total) {
                console.error("Widget Error:", widgetErr);
                alert("Payment failed: " + (widgetErr.message || JSON.stringify(widgetErr)));
            }
+           // Reload to clear Zoho widget injected state if it fails or gets closed
+           window.location.reload();
         }
       } else {
         alert('Payment initiated. Please check your Zoho Payments App.');
@@ -361,3 +367,10 @@ function updateCartCount() {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 fetchMenu();
+
+// Reload page if returned via browser bfcache (e.g., from Zoho redirect)
+window.addEventListener('pageshow', function (event) {
+  if (event.persisted) {
+    window.location.reload();
+  }
+});
