@@ -1,4 +1,4 @@
-const API_URL = `${window.location.origin}/api`;
+﻿const API_URL = `${window.location.origin}/api`;
 
 const token = localStorage.getItem('token');
 const user  = JSON.parse(localStorage.getItem('user') || 'null');
@@ -20,7 +20,7 @@ const socket = io({
   auth: { token }
 });
 
-// ─── DOM Elements ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ DOM Elements â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const menuGrid          = document.getElementById('menu-grid');
 const cartItemsContainer= document.getElementById('cart-items');
 const cartTotalElement  = document.getElementById('cart-total');
@@ -29,7 +29,7 @@ const menuSearchInput   = document.getElementById('menu-search');
 
 
 
-// ─── Fetch & Render Menu ───────────────────────────────────────────────────────
+// â”€â”€â”€ Fetch & Render Menu â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function fetchMenu() {
   try {
     const res = await fetch(`${API_URL}/items`, {
@@ -77,7 +77,7 @@ function renderMenu() {
       </div>
       <div class="item-info">
         <h3>${item.name}</h3>
-        <div class="item-price">₹${item.price}</div>
+        <div class="item-price">â‚¹${item.price}</div>
         <div style="font-size:0.85rem;color:${item.stock > 0 ? 'var(--text-muted)' : '#ff5252'};font-weight:600;margin-bottom:1rem;">
           ${item.stock > 0 ? `In Stock: ${item.stock}` : 'Out of Stock'}
         </div>
@@ -92,7 +92,7 @@ function renderMenu() {
   });
 }
 
-// ─── Cart Logic ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Cart Logic â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function addToCart(id) {
   socket.emit('update_cart', { itemId: id, change: 1 });
 }
@@ -111,7 +111,7 @@ function renderCart() {
   if (keys.length === 0) {
     cartItemsContainer.innerHTML = '<p style="color:var(--text-muted);text-align:center;margin-top:2rem;">Cart is empty</p>';
     checkoutBtn.disabled = true;
-    cartTotalElement.innerText = '₹0';
+    cartTotalElement.innerText = 'â‚¹0';
     updateCartCount();
     return;
   }
@@ -124,10 +124,10 @@ function renderCart() {
     div.innerHTML = `
       <div>
         <div style="font-weight:500;">${item.name}</div>
-        <div style="font-size:0.9rem;color:var(--text-muted)">₹${item.price} × ${item.quantity}</div>
+        <div style="font-size:0.9rem;color:var(--text-muted)">â‚¹${item.price} Ã— ${item.quantity}</div>
       </div>
       <div class="cart-item-controls">
-        <button onclick="updateQuantity(${id}, -1)">−</button>
+        <button onclick="updateQuantity(${id}, -1)">âˆ’</button>
         <span>${item.quantity}</span>
         <button onclick="updateQuantity(${id}, 1)">+</button>
       </div>
@@ -135,13 +135,13 @@ function renderCart() {
     cartItemsContainer.appendChild(div);
   });
 
-  cartTotalElement.innerText = `₹${total}`;
+  cartTotalElement.innerText = `â‚¹${total}`;
   checkoutBtn.disabled = false;
   checkoutBtn.onclick  = () => processCheckout(total);
   updateCartCount();
 }
 
-// ─── Checkout — Zoho Payments ──────────────────────────────────────────────────
+// â”€â”€â”€ Checkout â€” Zoho Payments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function processCheckout(total) {
   checkoutBtn.disabled  = true;
   checkoutBtn.innerText = 'Creating Order...';
@@ -277,7 +277,7 @@ socket.on('cart_error', (msg) => {
 
 
 
-// ─── Nav Links (injected dynamically) ────────────────────────────────────────
+// â”€â”€â”€ Nav Links (injected dynamically) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const nav = document.querySelector('nav');
 if (nav) {
   const ordersLink  = document.createElement('a');
@@ -297,7 +297,7 @@ if (nav) {
   nav.appendChild(logoutBtn);
 }
 
-// ─── Search, Filter & Sort ───────────────────────────────────────────────────
+// â”€â”€â”€ Search, Filter & Sort â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 if (menuSearchInput) {
   menuSearchInput.addEventListener('input', (e) => {
     searchQuery = e.target.value;
@@ -322,7 +322,7 @@ if (menuSortSelect) {
   });
 }
 
-// ─── Mobile Cart Handling ──────────────────────────────────────────────────
+// â”€â”€â”€ Mobile Cart Handling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const floatingCartBtn = document.getElementById('floating-cart-btn');
 const cartPanel = document.getElementById('cart-panel');
 const cartOverlay = document.getElementById('cart-overlay');
@@ -353,7 +353,7 @@ function updateCartCount() {
   }
 }
 
-// ─── Init ─────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Init â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 fetchMenu();
 renderCart();
 
@@ -363,3 +363,59 @@ window.addEventListener('pageshow', function (event) {
     window.location.reload();
   }
 });
+
+// --- Inject Mobile Bottom Navigation ---
+const isMenu = window.location.pathname.includes('menu.html') || window.location.pathname === '/' || window.location.pathname.endsWith('canteen/');
+const isOrders = window.location.pathname.includes('orders.html');
+
+const mobileNavHTML = 
+  <nav class="mobile-bottom-nav">
+    <ul class="nav-items">
+      <li>
+        <a href="menu.html" class=" + (isMenu ? 'active' : '') + ">
+          <i class="fa-solid fa-utensils"></i>
+          <span>Menu</span>
+        </a>
+      </li>
+      <li>
+        <a href="#" class="cart-trigger" id="mobile-cart-trigger">
+          <i class="fa-solid fa-basket-shopping"></i>
+          <span>Cart</span>
+          <span class="cart-badge" id="bottom-nav-cart-badge" style="display:none">0</span>
+        </a>
+      </li>
+      <li>
+        <a href="orders.html" class=" + (isOrders ? 'active' : '') + ">
+          <i class="fa-solid fa-receipt"></i>
+          <span>Orders</span>
+        </a>
+      </li>
+      <li>
+        <a href="#" id="mobile-logout-btn">
+          <i class="fa-solid fa-arrow-right-from-bracket"></i>
+          <span>Logout</span>
+        </a>
+      </li>
+    </ul>
+  </nav>
+;
+document.body.insertAdjacentHTML('beforeend', mobileNavHTML);
+
+const mobileLogoutBtn = document.getElementById('mobile-logout-btn');
+if (mobileLogoutBtn) {
+  mobileLogoutBtn.onclick = (e) => {
+    e.preventDefault();
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    window.location.href = 'login.html';
+  };
+}
+
+const mobileCartTrigger = document.getElementById('mobile-cart-trigger');
+if (mobileCartTrigger) {
+  mobileCartTrigger.onclick = (e) => {
+    e.preventDefault();
+    const cartPanel = document.getElementById('cart-panel');
+    if (cartPanel) cartPanel.classList.add('open');
+  };
+}
