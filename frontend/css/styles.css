@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+﻿@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
 
 :root {
   --primary-color: #e53935;
@@ -618,7 +618,7 @@ nav a.active {
   box-shadow: 0 0 0 3px rgba(229, 57, 53, 0.1);
 }
 
-/* UPI Pay Button � show on mobile, hide on desktop */
+/* UPI Pay Button — show on mobile, hide on desktop */
 .upi-pay-btn {
   display: none !important;
 }
@@ -708,8 +708,8 @@ nav a.active {
   pointer-events: none;
 }
 .spinning-parotta {
-  width: 100px;
-  height: 100px;
+  width: 60px;
+  height: 60px;
   animation: spinParotta 2s linear infinite;
   margin-bottom: 1rem;
 }
