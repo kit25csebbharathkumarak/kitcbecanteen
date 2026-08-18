@@ -388,7 +388,7 @@ app.get('/api/zoho-config', (req, res) => {
 
 // ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ ORDER ROUTES ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬Â Ã¢â€šÂ¬
 
-// Create order ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â  calls BS Solutions Gateway for payment link
+// Create order — calls BS Solutions Gateway for payment link
 app.post('/api/orders/create', authenticateToken, async (req, res) => {
   const { items, total } = req.body;
   const userId = req.user.id;
@@ -544,7 +544,7 @@ app.post('/api/orders/zoho-webhook', (req, res) => {
         io.emit('new_order', { ...order, status: 'Pending', txn_id: txnId });
         io.emit('menu_updated');
 
-        console.log(`[Zoho Webhook] ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Order ${order.id} confirmed ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â txnId: ${txnId}`);
+        console.log(`[Zoho Webhook] ✅ Order ${order.id} confirmed ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â txnId: ${txnId}`);
         return res.json({ success: true, orderId: order.id });
       }
     );
@@ -677,7 +677,7 @@ function confirmOrder(order, verifyData, res) {
       io.emit('new_order', { ...order, status: 'Pending', txn_id: txnId });
       io.emit('menu_updated');
 
-      console.log(`[Callback] ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Order ${orderId} confirmed ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â txnId: ${txnId}`);
+      console.log(`[Callback] ✅ Order ${orderId} confirmed ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â txnId: ${txnId}`);
       res.redirect('/orders.html?payment=success');
     }
   );
@@ -710,7 +710,7 @@ app.post('/api/orders/:id/confirm-payment', requireAdmin, (req, res) => {
         io.emit('new_order', { ...order, status: 'Pending', txn_id: resolvedTxnId });
         io.emit('menu_updated');
 
-        console.log(`[Admin] ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Payment confirmed for order ${id} ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â txnId: ${resolvedTxnId}`);
+        console.log(`[Admin] ✅ Payment confirmed for order ${id} ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â txnId: ${resolvedTxnId}`);
         res.json({ success: true, orderId: id, txnId: resolvedTxnId });
       }
     );
@@ -767,7 +767,7 @@ async function syncOrderIfPending(order) {
                io.emit('new_order', { ...order, status: 'Pending', txn_id: txnId });
                io.emit('menu_updated');
 
-               console.log(`[Sync] ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Order ${order.id} confirmed via sync ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â txnId: ${txnId}`);
+               console.log(`[Sync] ✅ Order ${order.id} confirmed via sync ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â txnId: ${txnId}`);
                order.status = 'Pending';
                order.txn_id = txnId;
                resolve(order);

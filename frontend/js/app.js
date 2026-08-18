@@ -77,7 +77,7 @@ function renderMenu() {
       </div>
       <div class="item-info">
         <h3>${item.name}</h3>
-        <div class="item-price">â‚¹${item.price}</div>
+        <div class="item-price">₹${item.price}</div>
         <div style="font-size:0.85rem;color:${item.stock > 0 ? 'var(--text-muted)' : '#ff5252'};font-weight:600;margin-bottom:1rem;">
           ${item.stock > 0 ? `In Stock: ${item.stock}` : 'Out of Stock'}
         </div>
@@ -111,7 +111,7 @@ function renderCart() {
   if (keys.length === 0) {
     cartItemsContainer.innerHTML = '<p style="color:var(--text-muted);text-align:center;margin-top:2rem;">Cart is empty</p>';
     checkoutBtn.disabled = true;
-    cartTotalElement.innerText = 'â‚¹0';
+    cartTotalElement.innerText = '₹0';
     updateCartCount();
     return;
   }
@@ -124,7 +124,7 @@ function renderCart() {
     div.innerHTML = `
       <div>
         <div style="font-weight:500;">${item.name}</div>
-        <div style="font-size:0.9rem;color:var(--text-muted)">â‚¹${item.price} Ã— ${item.quantity}</div>
+        <div style="font-size:0.9rem;color:var(--text-muted)">₹${item.price} × ${item.quantity}</div>
       </div>
       <div class="cart-item-controls">
         <button onclick="updateQuantity(${id}, -1)">âˆ’</button>
@@ -135,7 +135,7 @@ function renderCart() {
     cartItemsContainer.appendChild(div);
   });
 
-  cartTotalElement.innerText = `â‚¹${total}`;
+  cartTotalElement.innerText = `₹${total}`;
   checkoutBtn.disabled = false;
   checkoutBtn.onclick  = () => processCheckout(total);
   updateCartCount();
