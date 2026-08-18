@@ -1,4 +1,4 @@
-﻿const API_URL = `${window.location.origin}/api`;
+const API_URL = `${window.location.origin}/api`;
 
 const token = localStorage.getItem('token');
 const user  = JSON.parse(localStorage.getItem('user') || 'null');
@@ -368,11 +368,11 @@ window.addEventListener('pageshow', function (event) {
 const isMenu = window.location.pathname.includes('menu.html') || window.location.pathname === '/' || window.location.pathname.endsWith('canteen/');
 const isOrders = window.location.pathname.includes('orders.html');
 
-const mobileNavHTML = 
+const mobileNavHTML = `
   <nav class="mobile-bottom-nav">
     <ul class="nav-items">
       <li>
-        <a href="menu.html" class=" + (isMenu ? 'active' : '') + ">
+        <a href="menu.html" class="${isMenu ? 'active' : ''}">
           <i class="fa-solid fa-utensils"></i>
           <span>Menu</span>
         </a>
@@ -385,7 +385,7 @@ const mobileNavHTML =
         </a>
       </li>
       <li>
-        <a href="orders.html" class=" + (isOrders ? 'active' : '') + ">
+        <a href="orders.html" class="${isOrders ? 'active' : ''}">
           <i class="fa-solid fa-receipt"></i>
           <span>Orders</span>
         </a>
@@ -398,7 +398,7 @@ const mobileNavHTML =
       </li>
     </ul>
   </nav>
-;
+`;
 document.body.insertAdjacentHTML('beforeend', mobileNavHTML);
 
 const mobileLogoutBtn = document.getElementById('mobile-logout-btn');
