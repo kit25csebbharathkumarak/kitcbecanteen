@@ -708,12 +708,16 @@ nav a.active {
   pointer-events: none;
 }
 .spinning-parotta {
+  display: block;
+  margin: 0 auto 1rem auto;
+  transform-origin: center center;
   width: 30px;
   height: 30px;
   animation: spinParotta 2s linear infinite;
   margin-bottom: 1rem;
 }
 .loader-text {
+  text-align: center;
   font-family: 'Outfit', sans-serif;
   font-size: 1.2rem;
   font-weight: 700;
