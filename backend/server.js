@@ -408,7 +408,10 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
 
     for (const item of items) {
       const dbItem = rows.find(r => r.id === item.id);
-      if (!dbItem || dbItem.stock < item.quantity) {
+      const reservedQty = (activeCarts[userId] && activeCarts[userId][item.id]) || 0;
+      const unreservedQtyRequired = item.quantity - reservedQty;
+
+      if (!dbItem || dbItem.stock < unreservedQtyRequired) {
         return res.status(400).json({ error: `Not enough stock for ${item.name}` });
       }
     }
