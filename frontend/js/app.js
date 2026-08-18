@@ -43,14 +43,10 @@ async function fetchMenu() {
 }
 
 function renderMenu() {
-  menuGrid.innerHTML = '';
-  
   // 1. Filter by search query
   let filtered = menuItems.filter(item =>
     item.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-
 
   // 3. Sort by Price
   if (currentSort === 'price-asc') {
@@ -64,32 +60,68 @@ function renderMenu() {
     return;
   }
 
-  filtered.forEach(item => {
-    if (!item.available) return;
-    const div = document.createElement('div');
-    div.className = 'menu-item glass-panel';
-    
+  // Clear "No items found" if present
+  if (menuGrid.children.length > 0 && !menuGrid.children[0].classList.contains('menu-item')) {
+    menuGrid.innerHTML = '';
+  }
 
-    div.innerHTML = `
-      <div class="item-img-wrap" style="position:relative;">
-        <img src="${item.image}" alt="${item.name}">
+  const currentIds = Array.from(menuGrid.children).map(c => c.getAttribute('data-item-id'));
+  const newIds = filtered.filter(i => i.available).map(i => i.id.toString());
+  const orderChanged = currentIds.join(',') !== newIds.join(',');
 
-      </div>
-      <div class="item-info">
-        <h3>${item.name}</h3>
-        <div class="item-price">₹${item.price}</div>
-        <div style="font-size:0.85rem;color:${item.stock > 0 ? 'var(--text-muted)' : '#ff5252'};font-weight:600;margin-bottom:1rem;">
-          ${item.stock > 0 ? `In Stock: ${item.stock}` : 'Out of Stock'}
+  if (orderChanged) {
+    menuGrid.innerHTML = '';
+    filtered.forEach(item => {
+      if (!item.available) return;
+      const div = document.createElement('div');
+      div.className = 'menu-item glass-panel';
+      div.setAttribute('data-item-id', item.id);
+      
+      div.innerHTML = `
+        <div class="item-img-wrap" style="position:relative;">
+          <img src="${item.image}" alt="${item.name}">
         </div>
-      </div>
-      <button class="btn btn-secondary btn-add"
-        onclick="addToCart(${item.id})"
-        ${item.stock <= 0 ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>
-        ${item.stock > 0 ? 'Add to Cart' : 'Sold Out'}
-      </button>
-    `;
-    menuGrid.appendChild(div);
-  });
+        <div class="item-info">
+          <h3>${item.name}</h3>
+          <div class="item-price">₹${item.price}</div>
+          <div class="item-stock" style="font-size:0.85rem;color:${item.stock > 0 ? 'var(--text-muted)' : '#ff5252'};font-weight:600;margin-bottom:1rem;">
+            ${item.stock > 0 ? `In Stock: ${item.stock}` : 'Out of Stock'}
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-add"
+          onclick="addToCart(${item.id})"
+          ${item.stock <= 0 ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>
+          ${item.stock > 0 ? 'Add to Cart' : 'Sold Out'}
+        </button>
+      `;
+      menuGrid.appendChild(div);
+    });
+  } else {
+    // In-place update for existing items to prevent layout shifts/flickering
+    filtered.forEach(item => {
+      if (!item.available) return;
+      const div = menuGrid.querySelector(`.menu-item[data-item-id="${item.id}"]`);
+      if (div) {
+        const stockDiv = div.querySelector('.item-stock');
+        const btn = div.querySelector('.btn-add');
+        
+        stockDiv.style.color = item.stock > 0 ? 'var(--text-muted)' : '#ff5252';
+        stockDiv.innerText = item.stock > 0 ? `In Stock: ${item.stock}` : 'Out of Stock';
+        
+        if (item.stock <= 0) {
+          btn.setAttribute('disabled', 'true');
+          btn.style.opacity = '0.5';
+          btn.style.cursor = 'not-allowed';
+          btn.innerText = 'Sold Out';
+        } else {
+          btn.removeAttribute('disabled');
+          btn.style.opacity = '1';
+          btn.style.cursor = 'pointer';
+          btn.innerText = 'Add to Cart';
+        }
+      }
+    });
+  }
 }
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Cart Logic Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
