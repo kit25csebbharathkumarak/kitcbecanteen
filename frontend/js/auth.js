@@ -146,3 +146,74 @@ function logout() {
 }
 window.logout = logout;
 
+// --- Google Sign-In Integration ---
+async function initGoogleSignIn() {
+  const container = document.getElementById('google-auth-container');
+  if (!container) return;
+
+  try {
+    const res = await fetch(`${API_URL}/auth/google-client-id`);
+    if (!res.ok) return;
+    const data = await res.json();
+    
+    if (data.clientId) {
+      container.style.display = 'block';
+      
+      const script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
+      document.head.appendChild(script);
+
+      window.handleGoogleCallback = async (response) => {
+        try {
+          const verifyRes = await fetch(`${API_URL}/auth/google`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: response.credential })
+          });
+          const authData = await verifyRes.json();
+          
+          if (!verifyRes.ok) {
+            if (errorMsg) {
+              errorMsg.innerText = authData.error || 'Google login failed';
+              errorMsg.style.display = 'block';
+            }
+          } else {
+            localStorage.setItem('token', authData.token);
+            localStorage.setItem('user', JSON.stringify(authData.user));
+            
+            if (authData.user.role === 'admin') {
+              window.location.href = 'admin.html';
+            } else {
+              window.location.href = 'menu.html';
+            }
+          }
+        } catch (err) {
+          if (errorMsg) {
+            errorMsg.innerText = "Network error during Google Sign In.";
+            errorMsg.style.display = 'block';
+          }
+        }
+      };
+
+      script.onload = () => {
+        google.accounts.id.initialize({
+          client_id: data.clientId,
+          callback: handleGoogleCallback,
+          context: window.location.pathname.includes('register') ? 'signup' : 'signin'
+        });
+        
+        google.accounts.id.renderButton(
+          document.getElementById('google-btn-wrapper'),
+          { theme: 'outline', size: 'large', width: '100%', text: window.location.pathname.includes('register') ? 'signup_with' : 'signin_with' }
+        );
+      };
+    }
+  } catch (e) {
+    console.error("Failed to load Google Client ID", e);
+  }
+}
+
+initGoogleSignIn();
+

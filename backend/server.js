@@ -11,8 +11,10 @@ const bcrypt = require('bcrypt');
 const QRCode = require('qrcode');
 const axios = require('axios');
 const db = require('./database');
+const { OAuth2Client } = require('google-auth-library');
 
 const app = express();
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
@@ -268,6 +270,55 @@ app.post('/api/auth/login', (req, res) => {
     const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
   });
+});
+
+app.get('/api/auth/google-client-id', (req, res) => {
+  res.json({ clientId: process.env.GOOGLE_CLIENT_ID || '' });
+});
+
+app.post('/api/auth/google', async (req, res) => {
+  const { token } = req.body;
+  if (!token) return res.status(400).json({ error: 'Token is required' });
+
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken: token,
+      audience: process.env.GOOGLE_CLIENT_ID
+    });
+    const payload = ticket.getPayload();
+    const email = payload.email.toLowerCase();
+    const name = payload.name;
+
+    db.get('SELECT * FROM users WHERE email = ?', [email], async (err, user) => {
+      if (err) return res.status(500).json({ error: err.message });
+
+      if (user) {
+        // User exists, log them in
+        const jwtToken = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+        return res.json({ token: jwtToken, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+      } else {
+        // User doesn't exist, create account
+        const randomPassword = crypto.randomBytes(16).toString('hex');
+        const hashedPassword = await bcrypt.hash(randomPassword, 10);
+        
+        db.run(
+          'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?) RETURNING id',
+          [name, email, hashedPassword, 'student'],
+          (insertErr, info) => {
+            if (insertErr) return res.status(500).json({ error: insertErr.message });
+            
+            const newUserId = info.lastID;
+            const jwtToken = jwt.sign({ id: newUserId, email: email, role: 'student' }, JWT_SECRET, { expiresIn: '7d' });
+            return res.json({ token: jwtToken, user: { id: newUserId, name: name, email: email, role: 'student' } });
+          }
+        );
+      }
+    });
+
+  } catch (error) {
+    console.error('Google verification error:', error);
+    res.status(401).json({ error: 'Invalid Google token' });
+  }
 });
 
 app.post('/api/auth/forgot-password', (req, res) => {

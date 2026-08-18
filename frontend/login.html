@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -28,6 +28,18 @@
         <p id="error-msg" style="color: red; font-size: 0.9rem; display: none;"></p>
         <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Login</button>
       </form>
+      
+      <!-- Google Sign In Container -->
+      <div id="google-auth-container" style="display: none;">
+        <div style="text-align: center; margin-top: 1.5rem; position: relative;">
+          <hr style="border: 0; border-top: 1px solid var(--text-main); margin: 1rem 0;">
+          <span style="position: absolute; top: -0.75rem; left: 50%; transform: translateX(-50%); background: #ffffff; padding: 0 10px; color: var(--text-muted); font-size: 0.9rem;">OR</span>
+        </div>
+        <div id="google-btn-wrapper" style="display: flex; justify-content: center; margin-top: 1rem;">
+          <!-- Button will be rendered here by auth.js -->
+        </div>
+      </div>
+
       <div style="text-align: center; margin-top: 1rem;">
         <a href="forgot-password.html" style="font-size: 0.9rem;">Forgot Password?</a>
       </div>
