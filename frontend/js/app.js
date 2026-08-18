@@ -48,12 +48,7 @@ function renderMenu() {
     item.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // 2. Filter by Veg/Non-Veg
-  if (currentFilter === 'veg') {
-    filtered = filtered.filter(item => item.is_veg === true || item.is_veg === 1);
-  } else if (currentFilter === 'non-veg') {
-    filtered = filtered.filter(item => item.is_veg === false || item.is_veg === 0);
-  }
+
 
   // 3. Sort by Price
   if (currentSort === 'price-asc') {
@@ -72,15 +67,11 @@ function renderMenu() {
     const div = document.createElement('div');
     div.className = 'menu-item glass-panel';
     
-    // Veg/Non-Veg indicator badge
-    const vegBadge = item.is_veg
-      ? `<span class="badge veg-badge" style="position:absolute;top:10px;right:10px;z-index:2;"><i class="fa-solid fa-leaf"></i> Veg</span>`
-      : `<span class="badge nonveg-badge" style="position:absolute;top:10px;right:10px;z-index:2;"><i class="fa-solid fa-circle" style="font-size:0.5rem;vertical-align:middle;margin-right:2px;"></i> Non-Veg</span>`;
 
     div.innerHTML = `
       <div class="item-img-wrap" style="position:relative;">
         <img src="${item.image}" alt="${item.name}">
-        ${vegBadge}
+
       </div>
       <div class="item-info">
         <h3>${item.name}</h3>
