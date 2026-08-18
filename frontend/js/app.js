@@ -253,6 +253,10 @@ async function processCheckout(total) {
 // Socket event for menu updates
 socket.on('menu_updated', () => fetchMenu());
 
+// Ensure we fetch the latest menu once the socket connects, 
+// guaranteeing the old socket's disconnect has finished releasing stock.
+socket.on('connect', () => fetchMenu());
+
 // Socket event for cart updates
 socket.on('cart_updated', (serverCart) => {
   cart = {};
