@@ -754,6 +754,11 @@ app.get('/api/items/stats', requireAdmin, (req, res) => {
 
     const itemStats = {};
     orders.forEach(order => {
+      // Skip orders that haven't been paid for successfully
+      if (order.status === 'Pending Payment' || order.status === 'Failed') {
+        return;
+      }
+
       const items = JSON.parse(order.items);
       items.forEach(item => {
         if (!itemStats[item.id]) {
