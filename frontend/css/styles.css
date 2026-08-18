@@ -708,8 +708,8 @@ nav a.active {
   pointer-events: none;
 }
 .spinning-parotta {
-  width: 60px;
-  height: 60px;
+  width: 30px;
+  height: 30px;
   animation: spinParotta 2s linear infinite;
   margin-bottom: 1rem;
 }
