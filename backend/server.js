@@ -349,6 +349,15 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
         [orderId, itemsStr, total, txnRef, userId, paymentSessionId],
         async (insertErr) => {
           if (insertErr) return res.status(500).json({ error: insertErr.message });
+          
+          // Deduct stock IMMEDIATELY as requested
+          items.forEach(item => {
+            db.run('UPDATE items SET stock = stock - ? WHERE id = ?', [item.quantity, item.id], (sErr) => {
+              if (sErr) console.error('Stock reduction error:', sErr.message);
+            });
+          });
+          io.emit('menu_updated');
+
           return res.json({ success: true, orderId, paymentSessionId, amount: total });
         }
       );
@@ -431,13 +440,6 @@ app.post('/api/orders/zoho-webhook', (req, res) => {
           return res.status(500).json({ error: 'DB Error' });
         }
 
-        items.forEach(item => {
-          db.run('UPDATE items SET stock = stock - ? WHERE id = ?',
-            [item.quantity, item.id], (sErr) => {
-              if (sErr) console.error('[Zoho Webhook] Stock update error:', sErr.message);
-            });
-        });
-
         io.emit('payment_confirmed', { orderId: order.id, txnId: txnId });
         io.emit('new_order', { ...order, status: 'Pending', txn_id: txnId });
         io.emit('menu_updated');
@@ -461,9 +463,6 @@ app.post('/api/orders/verify-zoho-payment', (req, res) => {
     const items = JSON.parse(order.items);
     db.run("UPDATE orders SET status = 'Pending', paid_at = CURRENT_TIMESTAMP WHERE id = ?", [order.id], (updateErr) => {
       if (updateErr) return res.status(500).json({ error: 'DB Error' });
-      items.forEach(item => {
-        db.run('UPDATE items SET stock = stock - ? WHERE id = ?', [item.quantity, item.id]);
-      });
       io.emit('payment_confirmed', { orderId: order.id });
       io.emit('new_order', { ...order, status: 'Pending' });
       io.emit('menu_updated');
@@ -496,6 +495,13 @@ app.get('/api/payment-callback', async (req, res) => {
     findOrder((err, order) => {
       const oid = order ? order.id : callbackOrderId;
       db.run("UPDATE orders SET status = 'Failed' WHERE id = ?", [oid], () => {
+        if (order && order.status === 'Pending Payment') {
+           const items = JSON.parse(order.items);
+           items.forEach(item => {
+             db.run('UPDATE items SET stock = stock + ? WHERE id = ?', [item.quantity, item.id]);
+           });
+           io.emit('menu_updated');
+        }
         io.emit('order_status_update', { id: oid, status: 'Failed' });
         return res.redirect('/orders.html?error=payment_failed');
       });
@@ -533,6 +539,13 @@ app.get('/api/payment-callback', async (req, res) => {
       db.get('SELECT * FROM orders WHERE id = ?', [ourOrderId], (err, order) => {
         const oid = order ? order.id : ourOrderId;
         db.run("UPDATE orders SET status = 'Failed' WHERE id = ?", [oid], () => {
+          if (order && order.status === 'Pending Payment') {
+            const items = JSON.parse(order.items);
+            items.forEach(item => {
+              db.run('UPDATE items SET stock = stock + ? WHERE id = ?', [item.quantity, item.id]);
+            });
+            io.emit('menu_updated');
+          }
           res.redirect('/orders.html?error=payment_verification_failed');
         });
       });
@@ -558,11 +571,6 @@ function confirmOrder(order, verifyData, res) {
     [txnId, orderId],
     (updateErr) => {
       if (updateErr) return res.redirect('/orders.html?error=db_error');
-
-      items.forEach(item => {
-        db.run('UPDATE items SET stock = stock - ? WHERE id = ?',
-          [item.quantity, item.id], (sErr) => { if (sErr) console.error(sErr.message); });
-      });
 
       io.emit('payment_confirmed', { orderId, txnId });
       io.emit('new_order', { ...order, status: 'Pending', txn_id: txnId });
@@ -595,14 +603,6 @@ app.post('/api/orders/:id/confirm-payment', requireAdmin, (req, res) => {
       [resolvedTxnId, id],
       (updateErr) => {
         if (updateErr) return res.status(500).json({ error: updateErr.message });
-
-        // Deduct stock now that payment is confirmed
-        items.forEach(item => {
-          db.run('UPDATE items SET stock = stock - ? WHERE id = ?',
-            [item.quantity, item.id],
-            (sErr) => { if (sErr) console.error('Stock error for item', item.id, sErr.message); }
-          );
-        });
 
         // Notify all connected clients in real-time
         io.emit('payment_confirmed', { orderId: id, txnId: resolvedTxnId });
@@ -661,9 +661,6 @@ async function syncOrderIfPending(order) {
                if (err) return resolve(order);
                
                const items = JSON.parse(order.items);
-               items.forEach(item => {
-                 db.run('UPDATE items SET stock = stock - ? WHERE id = ?', [item.quantity, item.id]);
-               });
                
                io.emit('payment_confirmed', { orderId: order.id, txnId: txnId });
                io.emit('new_order', { ...order, status: 'Pending', txn_id: txnId });
@@ -679,6 +676,13 @@ async function syncOrderIfPending(order) {
   } else if (String(paymentStatus).toLowerCase() === 'failed') {
      return new Promise((resolve) => {
          db.run("UPDATE orders SET status = 'Failed' WHERE id = ?", [order.id], () => {
+             if (order) {
+                 const items = JSON.parse(order.items);
+                 items.forEach(item => {
+                     db.run('UPDATE items SET stock = stock + ? WHERE id = ?', [item.quantity, item.id]);
+                 });
+                 io.emit('menu_updated');
+             }
              order.status = 'Failed';
              resolve(order);
          });
