@@ -58,13 +58,19 @@ io.on('connection', (socket) => {
     const userCart = activeCarts[socket.id] || {};
     const itemIds = Object.keys(userCart);
     if (itemIds.length > 0) {
-      itemIds.forEach(itemId => {
-        const qty = userCart[itemId];
-        if (qty > 0) {
-          db.run('UPDATE items SET stock = stock + ? WHERE id = ?', [qty, itemId]);
-        }
+      const updatePromises = itemIds.map(itemId => {
+        return new Promise(resolve => {
+          const qty = userCart[itemId];
+          if (qty > 0) {
+            db.run('UPDATE items SET stock = stock + ? WHERE id = ?', [qty, itemId], resolve);
+          } else {
+            resolve();
+          }
+        });
       });
-      io.emit('menu_updated');
+      Promise.all(updatePromises).then(() => {
+        io.emit('menu_updated');
+      });
     }
     delete activeCarts[socket.id];
   });
