@@ -18,7 +18,14 @@ const io = new Server(server, { cors: { origin: '*' } });
 
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecret_canteen_key';
 
+let cachedZohoToken = null;
+let zohoTokenExpiry = null;
+
 const getZohoAccessToken = async () => {
+  if (cachedZohoToken && zohoTokenExpiry && Date.now() < zohoTokenExpiry) {
+    return cachedZohoToken;
+  }
+
   try {
     const params = new URLSearchParams();
     params.append('refresh_token', process.env.ZOHO_REFRESH_TOKEN || '');
@@ -34,7 +41,13 @@ const getZohoAccessToken = async () => {
         'Content-Type': 'application/x-www-form-urlencoded'
       }
     });
-    return res.data.access_token;
+
+    cachedZohoToken = res.data.access_token;
+    // Zoho returns expires_in in seconds (usually 3600). We subtract 5 minutes (300000ms) for a safety margin.
+    const expiresInMs = (res.data.expires_in * 1000) || (60 * 60 * 1000);
+    zohoTokenExpiry = Date.now() + expiresInMs - 300000;
+
+    return cachedZohoToken;
   } catch (err) {
     console.error('Zoho Auth Error:', err.response?.data || err.message);
     throw new Error('Failed to get Zoho Access Token');

@@ -71,19 +71,18 @@
         </div>
       </div>
 
-      <!-- Recently Scanned Highlight -->
+      <!-- Recently Scanned Highlight Modal -->
       <div id="recently-scanned-container"
-        style="display: none; margin-bottom: 2rem; animation: slideInDown 0.5s ease-out;">
+        style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 9999; justify-content: center; align-items: center; animation: fadeIn 0.3s ease;">
         <div class="glass-panel"
-          style="padding: 1.5rem; border: 2px solid var(--primary-color); background: rgba(229, 57, 53, 0.05);">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-            <h3 style="color: var(--primary-color); margin-bottom: 1rem;"><i class="fa-solid fa-circle-check"></i>
-              Recently Scanned</h3>
-            <button class="btn"
-              style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: transparent; color: var(--text-muted);"
-              onclick="document.getElementById('recently-scanned-container').style.display='none'">Dismiss</button>
-          </div>
-          <div id="scanned-order-details"></div>
+          style="background: #fff; padding: 3rem; border-radius: 20px; max-width: 800px; width: 90%; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.4); animation: slideInDown 0.4s ease-out;">
+          <h2 style="color: var(--primary-color); margin-bottom: 1.5rem; font-size: 2.5rem;">
+            <i class="fa-solid fa-qrcode"></i> Order Scanned
+          </h2>
+          <div id="scanned-order-details" style="font-size: 1.3rem; text-align: left; margin-bottom: 2rem;"></div>
+          <button class="btn btn-primary"
+            style="font-size: 1.2rem; padding: 1rem 3rem; border-radius: 30px; width: 100%;"
+            onclick="document.getElementById('recently-scanned-container').style.display='none'">Dismiss (Auto-closing)</button>
         </div>
       </div>
 

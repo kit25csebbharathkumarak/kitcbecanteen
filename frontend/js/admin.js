@@ -35,16 +35,35 @@ async function fetchOrderAndFulfill(orderId) {
     const res = await fetch(`${API_URL}/orders/${orderId}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
-    if (!res.ok) { alert('Order not found!'); return; }
+    if (!res.ok) { 
+      scannedOrderDetails.innerHTML = `<div style="color: #c0392b; font-weight: bold; font-size: 1.1rem; padding: 1rem; background: #fadbd8; border-radius: var(--border-radius);"><i class="fa-solid fa-triangle-exclamation"></i> Order not found: ${orderId}</div>`;
+      recentlyScannedContainer.style.display = 'flex';
+      
+      if (window.scanDismissTimeout) clearTimeout(window.scanDismissTimeout);
+      window.scanDismissTimeout = setTimeout(() => {
+        recentlyScannedContainer.style.display = 'none';
+      }, 5000);
+      return; 
+    }
 
     const order = await res.json();
     lastScannedId = order.id;
     renderScannedOrderDetails(order);
 
     if (order.status === 'Delivered') {
-      alert(`Order ${orderId} is already delivered.`);
+      const msgDiv = document.createElement('div');
+      msgDiv.style.cssText = 'color: #c0392b; font-weight: bold; margin-bottom: 1rem; background: #fadbd8; padding: 0.5rem 1rem; border-radius: var(--border-radius); border-left: 4px solid #c0392b;';
+      msgDiv.innerHTML = `<i class="fa-solid fa-circle-info"></i> Order ${orderId} is already delivered.`;
+      scannedOrderDetails.prepend(msgDiv);
       return;
     }
+    
+    // Add success message
+    const msgDiv = document.createElement('div');
+    msgDiv.style.cssText = 'color: #27ae60; font-weight: bold; margin-bottom: 1rem; background: #d5f5e3; padding: 0.5rem 1rem; border-radius: var(--border-radius); border-left: 4px solid #27ae60;';
+    msgDiv.innerHTML = `<i class="fa-solid fa-check-circle"></i> Successfully marked Order ${orderId} as Delivered.`;
+    scannedOrderDetails.prepend(msgDiv);
+
     await updateOrderStatus(orderId, 'Delivered');
 
     setTimeout(() => {
@@ -82,7 +101,14 @@ function renderScannedOrderDetails(order) {
       </div>
     </div>
   `;
-  recentlyScannedContainer.style.display = 'block';
+  recentlyScannedContainer.style.display = 'flex';
+  
+  // Auto dismiss after 5 seconds
+  if (window.scanDismissTimeout) clearTimeout(window.scanDismissTimeout);
+  window.scanDismissTimeout = setTimeout(() => {
+    recentlyScannedContainer.style.display = 'none';
+  }, 5000);
+
   renderOrders();
 }
 
