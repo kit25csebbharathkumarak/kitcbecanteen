@@ -16,6 +16,60 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
+const activeCarts = {};
+
+io.on('connection', (socket) => {
+  activeCarts[socket.id] = {};
+
+  socket.on('update_cart', (data) => {
+    const { itemId, change } = data;
+    
+    db.get('SELECT * FROM items WHERE id = ?', [itemId], (err, item) => {
+      if (err || !item) return socket.emit('cart_error', 'Item not found');
+      
+      if (change > 0) {
+        if (item.stock < change) {
+          return socket.emit('cart_error', `Only ${item.stock} units available.`);
+        }
+        db.run('UPDATE items SET stock = stock - ? WHERE id = ?', [change, itemId], (err) => {
+          if (!err) {
+            activeCarts[socket.id][itemId] = (activeCarts[socket.id][itemId] || 0) + change;
+            socket.emit('cart_updated', activeCarts[socket.id]);
+            io.emit('menu_updated');
+          }
+        });
+      } else if (change < 0) {
+        const removeAmt = Math.min(Math.abs(change), activeCarts[socket.id][itemId] || 0);
+        if (removeAmt > 0) {
+          db.run('UPDATE items SET stock = stock + ? WHERE id = ?', [removeAmt, itemId], (err) => {
+            if (!err) {
+              activeCarts[socket.id][itemId] -= removeAmt;
+              if (activeCarts[socket.id][itemId] <= 0) delete activeCarts[socket.id][itemId];
+              socket.emit('cart_updated', activeCarts[socket.id]);
+              io.emit('menu_updated');
+            }
+          });
+        }
+      }
+    });
+  });
+
+  socket.on('disconnect', () => {
+    const userCart = activeCarts[socket.id] || {};
+    const itemIds = Object.keys(userCart);
+    if (itemIds.length > 0) {
+      itemIds.forEach(itemId => {
+        const qty = userCart[itemId];
+        if (qty > 0) {
+          db.run('UPDATE items SET stock = stock + ? WHERE id = ?', [qty, itemId]);
+        }
+      });
+      io.emit('menu_updated');
+    }
+    delete activeCarts[socket.id];
+  });
+});
+
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecret_canteen_key';
 
 let cachedZohoToken = null;
@@ -55,11 +109,11 @@ const getZohoAccessToken = async () => {
 };
 
 
-// ─── CORS + STATIC FILES ──────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ CORS + STATIC FILES Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 app.use(cors());
 app.use(express.static(path.join(__dirname, '../frontend')));
 
-// ─── GLOBAL JSON PARSER ──────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ GLOBAL JSON PARSER Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 app.use(express.json({
   verify: (req, res, buf) => {
     req.rawBody = buf;
@@ -67,7 +121,7 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: true }));
 
-// ─── AUTH MIDDLEWARE ──────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ AUTH MIDDLEWARE Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -86,7 +140,7 @@ function requireAdmin(req, res, next) {
   });
 }
 
-// ─── AUTH ROUTES ──────────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ AUTH ROUTES Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 const otps = new Map();
 
 app.post('/api/auth/send-otp', async (req, res) => {
@@ -240,7 +294,7 @@ app.post('/api/auth/reset-password', (req, res) => {
   });
 });
 
-// ─── MENU ITEM ROUTES ─────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ MENU ITEM ROUTES Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 app.get('/api/items', authenticateToken, (req, res) => {
   db.all('SELECT * FROM items', [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -284,7 +338,7 @@ app.delete('/api/items/:id', requireAdmin, (req, res) => {
   });
 });
 
-// ─── ZOHO CONFIG ROUTE ────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ ZOHO CONFIG ROUTE Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 app.get('/api/zoho-config', (req, res) => {
   res.json({
     api_key: process.env.ZOHO_API_KEY || '',
@@ -292,9 +346,9 @@ app.get('/api/zoho-config', (req, res) => {
   });
 });
 
-// ─── ORDER ROUTES ─────────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ ORDER ROUTES Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
-// Create order — calls BS Solutions Gateway for payment link
+// Create order Ã¢â‚¬â€ calls BS Solutions Gateway for payment link
 app.post('/api/orders/create', authenticateToken, async (req, res) => {
   const { items, total } = req.body;
   const userId = req.user.id;
@@ -343,20 +397,24 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
       
       const paymentSessionId = zohoRes.data?.payments_session?.payments_session_id || 'dummy_zoho_session_' + Date.now();
 
-      // 4. Save order as 'Pending Payment' — stock NOT deducted until payment confirmed
+      // 4. Save order as 'Pending Payment' Ã¢â‚¬â€ stock NOT deducted until payment confirmed
       db.run(
         "INSERT INTO orders (id, items, total, status, txn_ref, user_id, zoho_payment_session_id) VALUES (?, ?, ?, 'Pending Payment', ?, ?, ?)",
         [orderId, itemsStr, total, txnRef, userId, paymentSessionId],
         async (insertErr) => {
           if (insertErr) return res.status(500).json({ error: insertErr.message });
           
-          // Deduct stock IMMEDIATELY as requested
-          items.forEach(item => {
-            db.run('UPDATE items SET stock = stock - ? WHERE id = ?', [item.quantity, item.id], (sErr) => {
-              if (sErr) console.error('Stock reduction error:', sErr.message);
+          // Clear the socket's active cart so it isn't refunded on disconnect
+          const reqSocketId = req.body.socketId;
+          if (reqSocketId && activeCarts[reqSocketId]) {
+            delete activeCarts[reqSocketId];
+          } else {
+            // Fallback: If they bypassed the cart, deduct stock now
+            items.forEach(item => {
+              db.run('UPDATE items SET stock = stock - ? WHERE id = ?', [item.quantity, item.id]);
             });
-          });
-          io.emit('menu_updated');
+            io.emit('menu_updated');
+          }
 
           return res.json({ success: true, orderId, paymentSessionId, amount: total });
         }
@@ -444,7 +502,7 @@ app.post('/api/orders/zoho-webhook', (req, res) => {
         io.emit('new_order', { ...order, status: 'Pending', txn_id: txnId });
         io.emit('menu_updated');
 
-        console.log(`[Zoho Webhook] ✅ Order ${order.id} confirmed — txnId: ${txnId}`);
+        console.log(`[Zoho Webhook] Ã¢Å“â€¦ Order ${order.id} confirmed Ã¢â‚¬â€ txnId: ${txnId}`);
         return res.json({ success: true, orderId: order.id });
       }
     );
@@ -576,7 +634,7 @@ function confirmOrder(order, verifyData, res) {
       io.emit('new_order', { ...order, status: 'Pending', txn_id: txnId });
       io.emit('menu_updated');
 
-      console.log(`[Callback] ✅ Order ${orderId} confirmed — txnId: ${txnId}`);
+      console.log(`[Callback] Ã¢Å“â€¦ Order ${orderId} confirmed Ã¢â‚¬â€ txnId: ${txnId}`);
       res.redirect('/orders.html?payment=success');
     }
   );
@@ -585,7 +643,7 @@ function confirmOrder(order, verifyData, res) {
 // Admin: manually confirm a payment after verifying in their UPI/Paytm app
 app.post('/api/orders/:id/confirm-payment', requireAdmin, (req, res) => {
   const { id } = req.params;
-  const { txnId } = req.body;  // optional — admin can type the UTR number
+  const { txnId } = req.body;  // optional Ã¢â‚¬â€ admin can type the UTR number
 
   db.get('SELECT * FROM orders WHERE id = ?', [id], (err, order) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -609,14 +667,14 @@ app.post('/api/orders/:id/confirm-payment', requireAdmin, (req, res) => {
         io.emit('new_order', { ...order, status: 'Pending', txn_id: resolvedTxnId });
         io.emit('menu_updated');
 
-        console.log(`[Admin] ✅ Payment confirmed for order ${id} — txnId: ${resolvedTxnId}`);
+        console.log(`[Admin] Ã¢Å“â€¦ Payment confirmed for order ${id} Ã¢â‚¬â€ txnId: ${resolvedTxnId}`);
         res.json({ success: true, orderId: id, txnId: resolvedTxnId });
       }
     );
   });
 });
 
-// ─── ZOHO PAYMENT SYNC HELPERS ─────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ ZOHO PAYMENT SYNC HELPERS Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 async function checkZohoPaymentStatus(paymentSessionId) {
   try {
     const accessToken = await getZohoAccessToken();
@@ -666,7 +724,7 @@ async function syncOrderIfPending(order) {
                io.emit('new_order', { ...order, status: 'Pending', txn_id: txnId });
                io.emit('menu_updated');
 
-               console.log(`[Sync] ✅ Order ${order.id} confirmed via sync — txnId: ${txnId}`);
+               console.log(`[Sync] Ã¢Å“â€¦ Order ${order.id} confirmed via sync Ã¢â‚¬â€ txnId: ${txnId}`);
                order.status = 'Pending';
                order.txn_id = txnId;
                resolve(order);
@@ -730,7 +788,7 @@ app.get('/api/orders', requireAdmin, (req, res) => {
   );
 });
 
-// Update order status (Admin — e.g. Pending → Delivered)
+// Update order status (Admin Ã¢â‚¬â€ e.g. Pending Ã¢â€ â€™ Delivered)
 app.put('/api/orders/:id/status', requireAdmin, (req, res) => {
   const { status } = req.body;
   const { id } = req.params;
@@ -749,7 +807,7 @@ app.delete('/api/orders/delivered', requireAdmin, (req, res) => {
   });
 });
 
-// Get specific order by ID (Admin — for QR scanner)
+// Get specific order by ID (Admin Ã¢â‚¬â€ for QR scanner)
 app.get('/api/orders/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
   db.get(
@@ -798,7 +856,7 @@ app.get('/api/items/stats', requireAdmin, (req, res) => {
   });
 });
 
-// ─── DAILY ORDERS CLEANUP ───────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ DAILY ORDERS CLEANUP Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 function cleanupDailyOrders() {
   const sql = db.isPostgres
     ? "DELETE FROM orders WHERE created_at < current_date"
@@ -823,8 +881,8 @@ setTimeout(() => {
   setInterval(cleanupDailyOrders, 24 * 60 * 60 * 1000);
 }, nextMidnight - now);
 
-// ─── START SERVER ─────────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ START SERVER Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`🚀 SRI CUMIN SEEDS CATERING SERVICES running on http://localhost:${PORT}`);
+  console.log(`Ã°Å¸Å¡â‚¬ SRI CUMIN SEEDS CATERING SERVICES running on http://localhost:${PORT}`);
 });

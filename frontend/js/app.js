@@ -7,7 +7,7 @@ if (!token || !user) {
   window.location.href = 'login.html';
 }
 
-let cart       = JSON.parse(localStorage.getItem('canteen_cart') || '{}');
+let cart       = {};
 let menuItems  = [];
 let searchQuery = '';
 let currentFilter = 'all';
@@ -92,32 +92,12 @@ function renderMenu() {
 
 // ─── Cart Logic ────────────────────────────────────────────────────────────────
 function addToCart(id) {
-  const item = menuItems.find(i => i.id === id);
-  if (!item || item.stock <= 0) return;
-
-  if (cart[id]) {
-    if (cart[id].quantity >= item.stock) {
-      alert(`Only ${item.stock} units available in stock.`);
-      return;
-    }
-    cart[id].quantity += 1;
-  } else {
-    cart[id] = { ...item, quantity: 1 };
-  }
-  renderCart();
+  socket.emit('update_cart', { itemId: id, change: 1 });
 }
 window.addToCart = addToCart;
 
 function updateQuantity(id, change) {
-  if (!cart[id]) return;
-  const item = menuItems.find(i => i.id === id);
-  if (change > 0 && cart[id].quantity >= item.stock) {
-    alert(`Only ${item.stock} units available in stock.`);
-    return;
-  }
-  cart[id].quantity += change;
-  if (cart[id].quantity <= 0) delete cart[id];
-  renderCart();
+  socket.emit('update_cart', { itemId: id, change: change });
 }
 window.updateQuantity = updateQuantity;
 
@@ -131,11 +111,8 @@ function renderCart() {
     checkoutBtn.disabled = true;
     cartTotalElement.innerText = '₹0';
     updateCartCount();
-    localStorage.removeItem('canteen_cart');
     return;
   }
-
-  localStorage.setItem('canteen_cart', JSON.stringify(cart));
 
   keys.forEach(id => {
     const item = cart[id];
@@ -175,7 +152,7 @@ async function processCheckout(total) {
         'Content-Type':  'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify({ items: itemsList, total })
+      body: JSON.stringify({ items: itemsList, total, socketId: socket.id })
     });
 
     const data = await res.json();
@@ -208,7 +185,6 @@ async function processCheckout(total) {
         // Wait for webhook to confirm via socket or navigate when the modal is closed
         socket.once('payment_confirmed', (msg) => {
            if (msg.orderId === data.orderId) {
-               localStorage.removeItem('canteen_cart');
                window.location.href = 'orders.html?payment=success';
            }
         });
@@ -244,7 +220,6 @@ async function processCheckout(total) {
                    });
                } catch(e) { console.error('Fallback verify failed:', e); }
 
-               localStorage.removeItem('canteen_cart');
                window.location.href = 'orders.html?payment=success';
            }
         } catch (widgetErr) {
@@ -277,6 +252,22 @@ async function processCheckout(total) {
 
 // Socket event for menu updates
 socket.on('menu_updated', () => fetchMenu());
+
+// Socket event for cart updates
+socket.on('cart_updated', (serverCart) => {
+  cart = {};
+  for (const id in serverCart) {
+    const item = menuItems.find(i => i.id == id);
+    if (item) {
+      cart[id] = { ...item, quantity: serverCart[id] };
+    }
+  }
+  renderCart();
+});
+
+socket.on('cart_error', (msg) => {
+  alert(msg);
+});
 
 
 
