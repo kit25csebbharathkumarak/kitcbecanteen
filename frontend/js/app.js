@@ -367,6 +367,7 @@ function updateCartCount() {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 fetchMenu();
+renderCart();
 
 // Reload page if returned via browser bfcache (e.g., from Zoho redirect)
 window.addEventListener('pageshow', function (event) {

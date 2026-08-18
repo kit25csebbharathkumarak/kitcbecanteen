@@ -618,7 +618,7 @@ nav a.active {
   box-shadow: 0 0 0 3px rgba(229, 57, 53, 0.1);
 }
 
-/* UPI Pay Button â€” show on mobile, hide on desktop */
+/* UPI Pay Button — show on mobile, hide on desktop */
 .upi-pay-btn {
   display: none !important;
 }
@@ -644,6 +644,26 @@ nav a.active {
   nav a {
     margin-left: 0;
   }
+  
+  .admin-layout {
+    grid-template-columns: 1fr;
+  }
+  
+  .order-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .logo {
+    font-size: 1.1rem;
+    text-align: center;
+    flex-direction: column;
+  }
+  
+  .logo-img {
+    height: 45px;
+  }
 }
 
 /* Smooth status badge transitions */
@@ -667,170 +687,3 @@ nav a.active {
 
 @media (max-width: 900px) {
   .floating-cart-btn {
-    display: flex;
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    background: var(--primary-color);
-    color: white;
-    border: none;
-    border-radius: 50%;
-    width: 60px;
-    height: 60px;
-    font-size: 1.5rem;
-    box-shadow: var(--shadow-lg);
-    cursor: pointer;
-    z-index: 1000;
-    align-items: center;
-    justify-content: center;
-  }
-  
-  .cart-badge {
-    position: absolute;
-    top: -5px;
-    right: -5px;
-    background: white;
-    color: var(--primary-color);
-    font-size: 0.8rem;
-    font-weight: bold;
-    border-radius: 50%;
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 2px solid var(--primary-color);
-  }
-
-  .cart-panel {
-    position: fixed;
-    top: auto;
-    bottom: -100%;
-    left: 0;
-    right: 0;
-    width: 100%;
-    height: 75vh;
-    border-radius: 20px 20px 0 0;
-    z-index: 1001;
-    transition: bottom 0.3s ease-in-out;
-    box-shadow: 0 -5px 20px rgba(0,0,0,0.2);
-    margin: 0;
-    padding: 1.5rem;
-  }
-  
-  .cart-panel.open {
-    bottom: 0;
-  }
-  
-  .cart-overlay {
-    display: block;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0,0,0,0.5);
-    z-index: 1000;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.3s ease-in-out;
-  }
-  
-  .cart-overlay.open {
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  .close-cart-btn {
-    display: block;
-    position: absolute;
-    top: 1rem;
-    right: 1.5rem;
-    font-size: 2rem;
-    cursor: pointer;
-    color: var(--text-muted);
-    line-height: 1;
-  }
-}
-
-/* Dietary Filter and Badge Styles */
-.filter-btn {
-  border: none;
-  background: none;
-  padding: 0 1.2rem;
-  cursor: pointer;
-  font-weight: 600;
-  font-family: inherit;
-  transition: var(--transition);
-  color: var(--text-main);
-  height: 100%;
-}
-
-.filter-btn:hover {
-  background: var(--bg-color);
-}
-
-.filter-btn.active {
-  background: var(--text-main) !important;
-  color: #ffffff !important;
-}
-
-.veg-badge {
-  background: #e8f5e9 !important;
-  color: #2e7d32 !important;
-  border-color: #2e7d32 !important;
-}
-
-.nonveg-badge {
-  background: #ffebee !important;
-  color: #c62828 !important;
-  border-color: #c62828 !important;
-}
-/* Parotta Loader */
-.parotta-loader-wrapper {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: var(--bg-color);
-  z-index: 9999;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  transition: opacity 0.5s ease;
-}
-
-.parotta-loader-wrapper.hidden {
-  opacity: 0;
-  pointer-events: none;
-}
-
-.spinning-parotta {
-  width: 120px;
-  height: 120px;
-  animation: spin-parotta 1.5s linear infinite;
-  filter: drop-shadow(0px 10px 15px rgba(0,0,0,0.2));
-  margin-bottom: 1.5rem;
-  border-radius: 50%;
-}
-
-@keyframes spin-parotta {
-  0% { transform: rotate(0deg) scale(1); }
-  50% { transform: rotate(180deg) scale(1.1); }
-  100% { transform: rotate(360deg) scale(1); }
-}
-
-.loader-text {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--primary-color);
-  letter-spacing: 1px;
-  animation: pulse-text 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse-text {
-  0%, 100% { opacity: 0.6; }
-  50% { opacity: 1; }
-}
