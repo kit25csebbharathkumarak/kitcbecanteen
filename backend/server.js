@@ -1,4 +1,4 @@
-﻿require('dotenv').config();
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -16,12 +16,39 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
-const activeCarts = {};
+const JWT_SECRET = process.env.JWT_SECRET || 'supersecret_canteen_key';
+
+const activeCarts = {}; // activeCarts[userId] = { itemId: qty }
+const activeConnections = {}; // activeConnections[userId] = count
+const disconnectTimeouts = {}; // disconnectTimeouts[userId] = timerId
+
+io.use((socket, next) => {
+  const token = socket.handshake.auth.token;
+  if (!token) return next(new Error('Authentication error'));
+  jwt.verify(token, JWT_SECRET, (err, decoded) => {
+    if (err) return next(new Error('Authentication error'));
+    socket.userId = decoded.id;
+    next();
+  });
+});
 
 io.on('connection', (socket) => {
-  activeCarts[socket.id] = {}; console.log('Socket connected:', socket.id);
+  const userId = socket.userId;
+  
+  if (!activeCarts[userId]) activeCarts[userId] = {};
+  if (!activeConnections[userId]) activeConnections[userId] = 0;
+  
+  activeConnections[userId]++;
+  
+  if (disconnectTimeouts[userId]) {
+    clearTimeout(disconnectTimeouts[userId]);
+    delete disconnectTimeouts[userId];
+  }
 
-  socket.on('update_cart', (data) => { console.log('update_cart from', socket.id, data);
+  // Initial emit to restore cart state if any
+  socket.emit('cart_updated', activeCarts[userId]);
+
+  socket.on('update_cart', (data) => {
     const { itemId, change } = data;
     
     db.get('SELECT * FROM items WHERE id = ?', [itemId], (err, item) => {
@@ -33,20 +60,21 @@ io.on('connection', (socket) => {
         }
         db.run('UPDATE items SET stock = stock - ? WHERE id = ?', [change, itemId], (err) => {
           if (!err) {
-            activeCarts[socket.id][itemId] = (activeCarts[socket.id][itemId] || 0) + change;
-            socket.emit('cart_updated', activeCarts[socket.id]);
+            activeCarts[userId][itemId] = (activeCarts[userId][itemId] || 0) + change;
             io.emit('menu_updated');
+            // Emit to this specific socket (since they all connect under their own id but share userId cart)
+            socket.emit('cart_updated', activeCarts[userId]);
           }
         });
       } else if (change < 0) {
-        const removeAmt = Math.min(Math.abs(change), activeCarts[socket.id][itemId] || 0);
+        const removeAmt = Math.min(Math.abs(change), activeCarts[userId][itemId] || 0);
         if (removeAmt > 0) {
           db.run('UPDATE items SET stock = stock + ? WHERE id = ?', [removeAmt, itemId], (err) => {
             if (!err) {
-              activeCarts[socket.id][itemId] -= removeAmt;
-              if (activeCarts[socket.id][itemId] <= 0) delete activeCarts[socket.id][itemId];
-              socket.emit('cart_updated', activeCarts[socket.id]);
+              activeCarts[userId][itemId] -= removeAmt;
+              if (activeCarts[userId][itemId] <= 0) delete activeCarts[userId][itemId];
               io.emit('menu_updated');
+              socket.emit('cart_updated', activeCarts[userId]);
             }
           });
         }
@@ -54,29 +82,35 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('disconnect', () => { console.log('disconnect from', socket.id, 'cart:', activeCarts[socket.id]);
-    const userCart = activeCarts[socket.id] || {};
-    const itemIds = Object.keys(userCart);
-    if (itemIds.length > 0) {
-      const updatePromises = itemIds.map(itemId => {
-        return new Promise(resolve => {
-          const qty = userCart[itemId];
-          if (qty > 0) {
-            db.run('UPDATE items SET stock = stock + ? WHERE id = ?', [qty, itemId], resolve);
-          } else {
-            resolve();
-          }
-        });
-      });
-      Promise.all(updatePromises).then(() => {
-        io.emit('menu_updated');
-      });
+  socket.on('disconnect', () => {
+    activeConnections[userId]--;
+    
+    if (activeConnections[userId] === 0) {
+      disconnectTimeouts[userId] = setTimeout(() => {
+        const userCart = activeCarts[userId] || {};
+        const itemIds = Object.keys(userCart);
+        if (itemIds.length > 0) {
+          const updatePromises = itemIds.map(itemId => {
+            return new Promise(resolve => {
+              const qty = userCart[itemId];
+              if (qty > 0) {
+                db.run('UPDATE items SET stock = stock + ? WHERE id = ?', [qty, itemId], resolve);
+              } else {
+                resolve();
+              }
+            });
+          });
+          Promise.all(updatePromises).then(() => {
+            io.emit('menu_updated');
+          });
+        }
+        delete activeCarts[userId];
+        delete activeConnections[userId];
+        delete disconnectTimeouts[userId];
+      }, 5000);
     }
-    delete activeCarts[socket.id];
   });
 });
-
-const JWT_SECRET = process.env.JWT_SECRET || 'supersecret_canteen_key';
 
 let cachedZohoToken = null;
 let zohoTokenExpiry = null;

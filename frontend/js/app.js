@@ -16,7 +16,9 @@ let currentSort = 'default';
 // Current order context (used by Razorpay integration)
 let currentOrderId  = null;
 
-const socket = io();
+const socket = io({
+  auth: { token }
+});
 
 // ─── DOM Elements ──────────────────────────────────────────────────────────────
 const menuGrid          = document.getElementById('menu-grid');
