@@ -454,23 +454,39 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
   const placeholders = items.map(() => '?').join(',');
   const itemIds = items.map(i => i.id);
 
-  db.all(`SELECT id, name, stock FROM items WHERE id IN (${placeholders})`, itemIds, async (err, rows) => {
+  db.all(`SELECT id, name, price, image, stock FROM items WHERE id IN (${placeholders})`, itemIds, async (err, rows) => {
     if (err) return res.status(500).json({ error: 'Database error' });
+
+    let serverTotal = 0;
+    const sanitizedItems = [];
 
     for (const item of items) {
       const dbItem = rows.find(r => r.id === item.id);
+      if (!dbItem) {
+        return res.status(400).json({ error: `Item not found: ${item.id}` });
+      }
+
       const reservedQty = (activeCarts[userId] && activeCarts[userId][item.id]) || 0;
       const unreservedQtyRequired = item.quantity - reservedQty;
 
-      if (!dbItem || dbItem.stock < unreservedQtyRequired) {
-        return res.status(400).json({ error: `Not enough stock for ${item.name}` });
+      if (dbItem.stock < unreservedQtyRequired) {
+        return res.status(400).json({ error: `Not enough stock for ${dbItem.name}` });
       }
+      
+      serverTotal += dbItem.price * item.quantity;
+      sanitizedItems.push({
+        id: dbItem.id,
+        name: dbItem.name,
+        price: dbItem.price,
+        image: dbItem.image,
+        quantity: item.quantity
+      });
     }
 
     // 2. Generate unique order ID
     const orderId = 'ORD' + Date.now();
     const txnRef = orderId;
-    const itemsStr = JSON.stringify(items);
+    const itemsStr = JSON.stringify(sanitizedItems);
 
     // 3. Create Zoho Payment Session
     try {
@@ -478,7 +494,7 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
       const zohoRes = await axios.post(
         `https://payments.zoho.in/api/v1/paymentsessions?account_id=${process.env.ZOHO_ACCOUNT_ID}`,
         {
-          amount: total,
+          amount: serverTotal,
           currency: "INR"
         },
         {
@@ -491,25 +507,21 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
       
       const paymentSessionId = zohoRes.data?.payments_session?.payments_session_id || 'dummy_zoho_session_' + Date.now();
 
-      // 4. Save order as 'Pending Payment' ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â stock NOT deducted until payment confirmed
+      // 4. Save order as 'Pending Payment'
       db.run(
         "INSERT INTO orders (id, items, total, status, txn_ref, user_id, zoho_payment_session_id) VALUES (?, ?, ?, 'Pending Payment', ?, ?, ?)",
-        [orderId, itemsStr, total, txnRef, userId, paymentSessionId],
+        [orderId, itemsStr, serverTotal, txnRef, userId, paymentSessionId],
         async (insertErr) => {
           if (insertErr) return res.status(500).json({ error: insertErr.message });
           
-          // We DO NOT clear activeCarts[req.user.id] here anymore.
-          // It will be cleared upon successful payment webhook.
-          const userId = req.user.id;
           if (!activeCarts[userId]) {
-            // Fallback: If they bypassed the cart, deduct stock now
-            items.forEach(item => {
+            sanitizedItems.forEach(item => {
               db.run('UPDATE items SET stock = stock - ? WHERE id = ?', [item.quantity, item.id]);
             });
             io.emit('menu_updated');
           }
 
-          return res.json({ success: true, orderId, paymentSessionId, amount: total });
+          return res.json({ success: true, orderId, paymentSessionId, amount: serverTotal });
         }
       );
     } catch (err) {
@@ -527,7 +539,11 @@ app.post('/api/orders/zoho-webhook', (req, res) => {
   const signingKey = process.env.ZOHO_SIGNING_KEY;
   const signatureHeader = req.headers['x-zoho-webhook-signature'];
 
-  if (signingKey && signatureHeader && req.rawBody) {
+  if (signingKey) {
+    if (!signatureHeader || !req.rawBody) {
+      console.error('[Zoho Webhook] ERROR: Missing signature or body.');
+      return res.status(401).json({ error: 'Missing signature' });
+    }
     try {
       const parts = signatureHeader.split(',');
       const t = parts[0].split('=')[1];
@@ -540,10 +556,12 @@ app.post('/api/orders/zoho-webhook', (req, res) => {
         .digest('hex');
 
       if (!crypto.timingSafeEqual(Buffer.from(v), Buffer.from(expectedSignature))) {
-        console.error('[Zoho Webhook] WARNING: Invalid signature. Proceeding anyway using session ID as secure token.');
+        console.error('[Zoho Webhook] ERROR: Invalid signature.');
+        return res.status(401).json({ error: 'Invalid signature' });
       }
     } catch (err) {
-      console.error('[Zoho Webhook] WARNING: Signature verification error:', err.message);
+      console.error('[Zoho Webhook] ERROR: Signature verification error:', err.message);
+      return res.status(401).json({ error: 'Signature verification failed' });
     }
   }
 
