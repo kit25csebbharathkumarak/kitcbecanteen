@@ -714,11 +714,13 @@ nav a.active {
     top: 0;
     right: -100%;
     width: 100%;
-    height: 100vh;
+    height: 100dvh; /* Better mobile viewport height */
     border: none;
     border-radius: 0;
     z-index: 1000;
     transition: right 0.3s ease;
+    padding: 1rem; /* Reduce edge whitespace slightly */
+    padding-bottom: 90px; /* Prevent overlap with bottom nav */
   }
 
   .cart-panel.open {
