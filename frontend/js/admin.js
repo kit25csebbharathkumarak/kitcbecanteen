@@ -47,16 +47,14 @@ async function fetchOrderAndFulfill(orderId) {
     }
 
     const order = await res.json();
-    lastScannedId = order.id;
-    renderScannedOrderDetails(order);
 
     if (order.status === 'Delivered') {
-      const msgDiv = document.createElement('div');
-      msgDiv.style.cssText = 'color: #c0392b; font-weight: bold; margin-bottom: 1rem; background: #fadbd8; padding: 0.5rem 1rem; border-radius: var(--border-radius); border-left: 4px solid #c0392b;';
-      msgDiv.innerHTML = `<i class="fa-solid fa-circle-info"></i> Order ${orderId} is already delivered.`;
-      scannedOrderDetails.prepend(msgDiv);
+      // Do not scan again and do not show popup if already delivered
       return;
     }
+
+    lastScannedId = order.id;
+    renderScannedOrderDetails(order);
     
     // Add success message
     const msgDiv = document.createElement('div');
@@ -78,7 +76,7 @@ async function fetchOrderAndFulfill(orderId) {
 function renderScannedOrderDetails(order) {
   const items    = JSON.parse(order.items);
   const itemsStr = items.map(i =>
-    `<li style="margin-bottom:0.3rem;"><strong>${i.quantity}×</strong> ${i.name}</li>`
+    `<li style="margin-bottom:0.8rem;font-size:2rem;line-height:1.2;"><strong>${i.quantity}×</strong> ${i.name}</li>`
   ).join('');
 
   const txnLine = order.txn_id
@@ -90,10 +88,10 @@ function renderScannedOrderDetails(order) {
   scannedOrderDetails.innerHTML = `
     <div style="display:flex;gap:1.5rem;align-items:flex-start;flex-wrap:wrap;">
       <div style="flex:1;min-width:200px;">
-        <h4 style="font-family:monospace;font-size:1.2rem;margin-bottom:0.2rem;">${order.id}</h4>
-        <div style="font-weight:700;color:var(--text-main);margin-bottom:0.8rem;">Ordered by: ${order.user_name}</div>
+        <div style="font-family:monospace;font-size:0.8rem;margin-bottom:0.2rem;color:var(--text-muted);">Order ID: ${order.id}</div>
+        <div style="font-weight:600;font-size:0.9rem;color:var(--text-muted);margin-bottom:1rem;">Ordered by: ${order.user_name}</div>
         ${txnLine}
-        <ul style="list-style:none;padding:0;font-size:1rem;">${itemsStr}</ul>
+        <ul style="list-style:none;padding:0;color:var(--text-main);">${itemsStr}</ul>
       </div>
       <div style="text-align:right;">
         <div style="font-size:1.4rem;font-weight:700;color:var(--primary-color);">₹${order.total}</div>
