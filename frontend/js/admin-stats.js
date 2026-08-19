@@ -4,9 +4,16 @@ const user = JSON.parse(localStorage.getItem('user') || 'null');
 
 if (!token || !user || user.role !== 'admin') {
   window.location.href = 'login.html';
+}
+
 const socket = io({
   auth: { token }
 });
+
+socket.on('new_order', () => fetchItemStats());
+socket.on('payment_confirmed', () => fetchItemStats());
+socket.on('order_status_update', () => fetchItemStats());
+
 const statsDiv = document.getElementById('item-stats');
 const totalRevenueDiv = document.getElementById('total-revenue-stat');
 

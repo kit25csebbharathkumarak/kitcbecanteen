@@ -4,9 +4,14 @@ const user = JSON.parse(localStorage.getItem('user') || 'null');
 
 if (!token || !user || user.role !== 'admin') {
   window.location.href = 'login.html';
+}
+
 const socket = io({
   auth: { token }
 });
+
+socket.on('menu_updated', () => fetchAdminMenu());
+
 const adminMenuList = document.getElementById('admin-menu-list');
 const addItemForm = document.getElementById('add-item-form');
 

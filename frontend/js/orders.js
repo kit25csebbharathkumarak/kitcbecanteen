@@ -152,22 +152,8 @@ if (nav) {
 }
 
 // ─── Socket Updates ───────────────────────────────────────────────────────────
-socket.on('order_status_update', (data) => {
-  const o = orders.find(x => x.id === data.id);
-  if (o) {
-    o.status = data.status;
-    renderOrders();
-  }
-});
-
-socket.on('payment_confirmed', (data) => {
-  const o = orders.find(x => x.id === data.orderId);
-  if (o) {
-    o.status = 'PAID';
-    if (data.txnId) o.txn_id = data.txnId;
-    renderOrders();
-  }
-});
+socket.on('order_status_update', () => fetchMyOrders());
+socket.on('payment_confirmed', () => fetchMyOrders());
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 fetchMyOrders();

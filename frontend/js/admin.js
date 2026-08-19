@@ -237,26 +237,9 @@ function renderOrders() {
 }
 
 // ─── Socket Events ────────────────────────────────────────────────────────────
-socket.on('new_order', (order) => {
-  if (!orders.find(o => o.id === order.id)) {
-    orders.unshift(order);
-    renderOrders();
-  }
-});
-
-socket.on('order_status_update', (data) => {
-  const o = orders.find(x => x.id === data.id);
-  if (o) { o.status = data.status; renderOrders(); }
-});
-
-socket.on('payment_confirmed', (data) => {
-  const o = orders.find(x => x.id === data.orderId);
-  if (o) {
-    o.status = 'Pending';
-    if (data.txnId) o.txn_id = data.txnId;
-    renderOrders();
-  }
-});
+socket.on('new_order', () => fetchOrders());
+socket.on('order_status_update', () => fetchOrders());
+socket.on('payment_confirmed', () => fetchOrders());
 
 socket.on('menu_updated', () => { /* menu change doesn't affect admin orders view */ });
 
