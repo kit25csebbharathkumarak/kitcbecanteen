@@ -685,6 +685,10 @@ nav a.active {
   display: none;
 }
 
+.bottom-nav {
+  display: none;
+}
+
 @media (max-width: 900px) {
   .floating-cart-btn {
     display: flex;
@@ -788,9 +792,6 @@ nav a.active {
   }
 }
 
-.bottom-nav {
-  display: none;
-}
 
 /* Parotta Loader Styles */
 .parotta-loader-wrapper {
