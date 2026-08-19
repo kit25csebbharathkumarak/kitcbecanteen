@@ -6,7 +6,9 @@ if (!token || !user) {
   window.location.href = 'login.html';
 }
 
-const socket = io();
+const socket = io({
+  auth: { token }
+});
 let orders   = [];
 
 // ─── URL Params for Payment Callback ─────────────────────────────────────────────

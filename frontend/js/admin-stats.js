@@ -4,9 +4,9 @@ const user = JSON.parse(localStorage.getItem('user') || 'null');
 
 if (!token || !user || user.role !== 'admin') {
   window.location.href = 'login.html';
-}
-
-const socket = io();
+const socket = io({
+  auth: { token }
+});
 const statsDiv = document.getElementById('item-stats');
 const totalRevenueDiv = document.getElementById('total-revenue-stat');
 

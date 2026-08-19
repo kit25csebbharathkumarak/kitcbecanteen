@@ -5,9 +5,9 @@ const user    = JSON.parse(localStorage.getItem('user') || 'null');
 if (!token || !user || user.role !== 'admin') {
   window.location.href = 'login.html';
 }
-
-const socket = io();
-
+const socket = io({
+  auth: { token }
+});
 // ─── DOM ───────────────────────────────────────────────────────────────────────
 const ordersBoard              = document.getElementById('orders-board');
 const recentlyScannedContainer = document.getElementById('recently-scanned-container');
