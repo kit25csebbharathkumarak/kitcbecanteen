@@ -519,6 +519,18 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
               db.run('UPDATE items SET stock = stock - ? WHERE id = ?', [item.quantity, item.id]);
             });
             io.emit('menu_updated');
+          } else {
+            sanitizedItems.forEach(item => {
+              if (activeCarts[userId][item.id]) {
+                activeCarts[userId][item.id] -= item.quantity;
+                if (activeCarts[userId][item.id] <= 0) {
+                  delete activeCarts[userId][item.id];
+                }
+              }
+            });
+            if (Object.keys(activeCarts[userId]).length === 0) {
+              delete activeCarts[userId];
+            }
           }
 
           return res.json({ success: true, orderId, paymentSessionId, amount: serverTotal });
@@ -621,23 +633,28 @@ app.post('/api/orders/zoho-webhook', (req, res) => {
 });
 
 // Fallback Verification Endpoint
-app.post('/api/orders/verify-zoho-payment', (req, res) => {
+app.post('/api/orders/verify-zoho-payment', async (req, res) => {
   const { paymentSessionId, orderId } = req.body;
   if (!paymentSessionId) return res.status(400).json({ error: 'Missing session ID' });
 
-  db.get('SELECT * FROM orders WHERE id = ? AND zoho_payment_session_id = ?', [orderId, paymentSessionId], (err, order) => {
+  db.get('SELECT * FROM orders WHERE id = ? AND zoho_payment_session_id = ?', [orderId, paymentSessionId], async (err, order) => {
     if (err || !order) return res.status(404).json({ error: 'Order not found' });
     if (order.status !== 'Pending Payment') return res.json({ success: true, alreadyProcessed: true });
 
-    const items = JSON.parse(order.items);
-    db.run("UPDATE orders SET status = 'Pending', paid_at = CURRENT_TIMESTAMP WHERE id = ?", [order.id], (updateErr) => {
-      if (updateErr) return res.status(500).json({ error: 'DB Error' });
-      if (order.user_id) delete activeCarts[order.user_id];
-      io.emit('payment_confirmed', { orderId: order.id });
-      io.emit('new_order', { ...order, status: 'Pending' });
-      io.emit('menu_updated');
-      res.json({ success: true });
-    });
+    try {
+      const updatedOrder = await syncOrderIfPending(order);
+      if (updatedOrder.status === 'Pending') {
+        if (updatedOrder.user_id) delete activeCarts[updatedOrder.user_id];
+        return res.json({ success: true });
+      } else if (updatedOrder.status === 'Failed') {
+        return res.status(400).json({ error: 'Payment failed' });
+      } else {
+        return res.status(400).json({ error: 'Payment not completed yet' });
+      }
+    } catch (syncErr) {
+      console.error('Error verifying payment:', syncErr);
+      return res.status(500).json({ error: 'Verification error' });
+    }
   });
 });
 
