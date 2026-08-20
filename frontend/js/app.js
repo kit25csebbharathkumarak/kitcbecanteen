@@ -12,6 +12,7 @@ let menuItems  = [];
 let searchQuery = '';
 let currentFilter = 'all';
 let currentSort = 'default';
+let shopOpen = true;
 
 // Current order context (used by Razorpay integration)
 let currentOrderId  = null;
@@ -30,6 +31,39 @@ const menuSearchInput   = document.getElementById('menu-search');
 
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Fetch & Render Menu Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+
+// Fetch Shop Status
+fetch(`${API_URL}/shop-status`)
+  .then(res => res.json())
+  .then(data => {
+    shopOpen = data.isOpen;
+    updateShopUI();
+  })
+  .catch(err => console.error('Error fetching shop status:', err));
+
+socket.on('shop_status_changed', (isOpen) => {
+  shopOpen = isOpen;
+  updateShopUI();
+});
+
+function updateShopUI() {
+  const banner = document.getElementById('shop-closed-banner');
+  if (banner) {
+    banner.style.display = shopOpen ? 'none' : 'block';
+  }
+  if (checkoutBtn) {
+    checkoutBtn.disabled = !shopOpen;
+    if (!shopOpen) {
+      checkoutBtn.style.opacity = '0.5';
+      checkoutBtn.style.cursor = 'not-allowed';
+    } else {
+      checkoutBtn.style.opacity = '1';
+      checkoutBtn.style.cursor = 'pointer';
+    }
+  }
+  renderMenu();
+}
+
 async function fetchMenu() {
   try {
     const res = await fetch(`${API_URL}/items`, {

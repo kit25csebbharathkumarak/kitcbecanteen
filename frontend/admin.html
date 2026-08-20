@@ -34,6 +34,19 @@
       <!-- Quick Stats Card -->
       <div class="glass-panel" style="padding: 1.5rem; margin-top: 2rem; border-left: 5px solid var(--primary-color);">
         <h4 style="margin-bottom: 0.5rem;">Admin Quick Links</h4>
+        <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-color); padding: 0.8rem; border-radius: 10px; border: 1px solid rgba(0,0,0,0.05); margin-top: 1rem;">
+          <span style="font-weight: 600;"><i class="fa-solid fa-store"></i> Shop Status</span>
+          <label class="switch" style="position: relative; display: inline-block; width: 50px; height: 24px;">
+            <input type="checkbox" id="shop-status-toggle" style="opacity: 0; width: 0; height: 0;" checked>
+            <span class="slider round" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 24px;"></span>
+          </label>
+        </div>
+        <style>
+          .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+          input:checked + .slider { background-color: var(--primary-color); }
+          input:focus + .slider { box-shadow: 0 0 1px var(--primary-color); }
+          input:checked + .slider:before { transform: translateX(26px); }
+        </style>
         <div style="display: flex; flex-direction: column; gap: 0.8rem; margin-top: 1rem;">
           <a href="admin-menu.html" class="btn btn-secondary" style="font-size: 0.9rem; padding: 0.5rem;"><i
               class="fa-solid fa-plus"></i> Add New Items</a>

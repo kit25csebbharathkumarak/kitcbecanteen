@@ -86,6 +86,20 @@ const initializeDatabase = async () => {
 
   // Orders table
 
+  // Settings table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )
+  `);
+  
+  await pool.query(`
+    INSERT INTO settings (key, value) 
+    VALUES ('shop_open', 'true') 
+    ON CONFLICT (key) DO NOTHING
+  `);
+
   // Orders table
   await pool.query(`
     CREATE TABLE IF NOT EXISTS orders (

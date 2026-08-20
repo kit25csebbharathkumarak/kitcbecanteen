@@ -285,3 +285,41 @@ orderSearchInput.addEventListener('input', (e) => {
   searchQuery = e.target.value;
   renderOrders();
 });
+
+// ─── Shop Status Toggle ───────────────────────────────────────────────────────
+const shopStatusToggle = document.getElementById('shop-status-toggle');
+if (shopStatusToggle) {
+  // Fetch initial status
+  fetch(`${API_URL}/shop-status`)
+    .then(res => res.json())
+    .then(data => {
+      shopStatusToggle.checked = data.isOpen;
+    })
+    .catch(err => console.error('Error fetching shop status:', err));
+
+  // Handle toggle change
+  shopStatusToggle.addEventListener('change', async (e) => {
+    const isOpen = e.target.checked;
+    try {
+      const res = await fetch(`${API_URL}/shop-status`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ isOpen })
+      });
+      if (!res.ok) {
+        shopStatusToggle.checked = !isOpen; // revert
+        alert('Failed to update shop status');
+      }
+    } catch (err) {
+      console.error(err);
+      shopStatusToggle.checked = !isOpen; // revert
+    }
+  });
+
+  socket.on('shop_status_changed', (isOpen) => {
+    shopStatusToggle.checked = isOpen;
+  });
+}
