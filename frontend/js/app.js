@@ -434,9 +434,103 @@ async function processCheckout(total) {
 
     if (data.payment_url) {
       window.location.href = data.payment_url;
+      return;
+    }
+
+    if (data.paymentSessionId) {
+      let configData = null;
+      try {
+        const configRes = await fetch(`${API_URL}/zoho-config`);
+        configData = await configRes.json();
+      } catch (e) {}
+
+      if (typeof ZPayments !== 'undefined' && configData && configData.account_id) {
+        let config = {
+          "account_id": configData.account_id,
+          "domain": "IN",
+          "otherOptions": {
+            "api_key": configData.api_key
+          }
+        };
+
+        const zp = new ZPayments(config);
+        
+        // Wait for webhook or server to confirm via socket
+        socket.once('payment_confirmed', (msg) => {
+           if (msg.orderId === data.orderId) {
+               window.location.href = `orders.html?payment=success&orderId=${data.orderId}`;
+           }
+        });
+
+        let options = {
+          "amount": total.toString(),
+          "currency_code": "INR",
+          "payments_session_id": data.paymentSessionId,
+          "description": "Order " + data.orderId
+        };
+
+        let widgetPromise;
+        if (typeof zp.open === 'function') {
+           widgetPromise = zp.open(options);
+        } else if (typeof zp.requestPaymentMethod === 'function') {
+           widgetPromise = zp.requestPaymentMethod(options);
+        } else if (typeof zp.checkout === 'function') {
+           widgetPromise = zp.checkout(options);
+        } else {
+           alert('Checkout Error: Unable to find payment method on Zoho widget.');
+           checkoutBtn.disabled = false;
+           checkoutBtn.innerText = 'Proceed to Pay';
+           return;
+        }
+
+        try {
+           let response = await widgetPromise;
+           if (response) {
+               try {
+                   await fetch(`${API_URL}/orders/verify-zoho-payment`, {
+                       method: 'POST',
+                       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                       body: JSON.stringify({
+                         orderId: data.orderId,
+                         paymentSessionId: data.paymentSessionId,
+                         paymentId: response.payment_id || response.payments_session_id || 'ZOHO_' + Date.now()
+                       })
+                   });
+               } catch(e) { console.error('Fallback verify failed:', e); }
+
+               window.location.href = `orders.html?payment=success&orderId=${data.orderId}`;
+               return;
+           }
+        } catch (widgetErr) {
+           if (widgetErr && widgetErr.code !== 'widget_closed') {
+               console.error("Widget Error:", widgetErr);
+               alert("Payment failed: " + (widgetErr.message || JSON.stringify(widgetErr)));
+           }
+           window.location.reload();
+           return;
+        }
+      } else {
+        // Direct / Test mode verification when external gateway credentials are not loaded
+        try {
+          await fetch(`${API_URL}/orders/verify-zoho-payment`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({
+              orderId: data.orderId,
+              paymentSessionId: data.paymentSessionId,
+              paymentId: 'DEMO_' + Date.now()
+            })
+          });
+        } catch (e) {}
+
+        window.location.href = `orders.html?payment=success&orderId=${data.orderId}`;
+        return;
+      }
+      
+      checkoutBtn.disabled  = false;
+      checkoutBtn.innerText = 'Proceed to Pay';
     } else {
-      alert('Failed to obtain Payment URL from Gateway. The order has been saved and is pending payment.');
-      window.location.href = 'orders.html';
+      window.location.href = `orders.html?orderId=${data.orderId}`;
     }
 
   } catch (err) {

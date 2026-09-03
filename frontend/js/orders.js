@@ -13,8 +13,10 @@ let orders   = [];
 
 // --- URL Params for Payment Callback ---
 const urlParams = new URLSearchParams(window.location.search);
-if (urlParams.get('payment') === 'success') {
-  alert('Payment successful! Your order has been placed.');
+const isPaymentSuccess = urlParams.get('payment') === 'success';
+const paymentSuccessOrderId = urlParams.get('orderId');
+
+if (isPaymentSuccess) {
   window.history.replaceState({}, document.title, window.location.pathname);
 }
 if (urlParams.get('error')) {
@@ -50,7 +52,7 @@ window.showPickupQR = function(orderId) {
   qrModal.classList.add('active');
 };
 
-// --- Fetch --- Render My Orders ---
+// --- Fetch & Render My Orders ---
 async function fetchMyOrders() {
   try {
     const res = await fetch(`${API_URL}/orders/me`, {
@@ -58,7 +60,25 @@ async function fetchMyOrders() {
     });
     if (!res.ok) throw new Error('Failed to fetch orders');
     orders = await res.json();
-    renderOrders();
+    renderMyOrders();
+
+    // If customer just completed payment, pop up their collection QR code immediately!
+    if (isPaymentSuccess) {
+      const targetId = paymentSuccessOrderId || (orders.length > 0 ? orders[0].id : null);
+      if (targetId) {
+        setTimeout(() => {
+          showPickupQR(targetId);
+          playNotificationSound('food_ready');
+          showToast({
+            title: '🎉 Payment Successful!',
+            message: `Order #${targetId} is placed! Show your QR code at the counter for pickup.`,
+            type: 'shop-open',
+            icon: 'fa-circle-check',
+            duration: 8000
+          });
+        }, 400);
+      }
+    }
   } catch (err) {
     console.error(err);
     userOrdersBoard.innerHTML = '<p style="color:red">Failed to load orders. Please refresh.</p>';

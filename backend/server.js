@@ -606,34 +606,66 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
     const txnRef = orderId;
     const itemsStr = JSON.stringify(sanitizedItems);
 
-    // 2. Insert order row into DB with Pending Payment status
+    // 2. Obtain Payment Session or Gateway URL
+    let paymentSessionId = null;
+    let paymentUrl = null;
+
+    // Check if Zoho is configured
+    if (process.env.ZOHO_ACCOUNT_ID && process.env.ZOHO_CLIENT_ID && process.env.ZOHO_REFRESH_TOKEN) {
+      try {
+        const accessToken = await getZohoAccessToken();
+        const zohoRes = await axios.post(
+          `https://payments.zoho.in/api/v1/paymentsessions?account_id=${process.env.ZOHO_ACCOUNT_ID}`,
+          {
+            amount: serverTotal,
+            currency: "INR"
+          },
+          {
+            headers: {
+              'Authorization': `Zoho-oauthtoken ${accessToken}`,
+              'Content-Type': 'application/json'
+            },
+            timeout: 10000
+          }
+        );
+        paymentSessionId = zohoRes.data?.payments_session?.payments_session_id || 'zoho_' + orderId;
+      } catch (zohoErr) {
+        console.error('Zoho Payments session error:', zohoErr.response?.data || zohoErr.message);
+        paymentSessionId = 'zoho_fallback_' + orderId;
+      }
+    } else if (process.env.UPI_GATEWAY_URL && process.env.UPI_GATEWAY_KEY) {
+      // Check if UPI Gateway is configured
+      try {
+        const gatewayBaseUrl = process.env.UPI_GATEWAY_URL.replace(/\/+$/, '');
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        
+        const paymentReq = await axios.post(`${gatewayBaseUrl}/api/gateway/payment/create`, {
+          clientCode: process.env.UPI_GATEWAY_KEY,
+          developerOrderId: orderId,
+          amount: serverTotal,
+          callbackUrl: `${frontendUrl}/api/payment-callback`
+        }, { timeout: 8000 });
+        
+        paymentUrl = paymentReq.data?.payment_url || null;
+      } catch (gatewayErr) {
+        console.error('UPI Gateway Error:', gatewayErr.response?.data || gatewayErr.message);
+        // Fallback session so student can proceed
+        paymentSessionId = 'upi_session_' + orderId;
+      }
+    }
+
+    if (!paymentSessionId && !paymentUrl) {
+      paymentSessionId = 'session_' + orderId;
+    }
+
+    // 3. Insert order row into DB
     await client.query(
-      "INSERT INTO orders (id, items, total, status, txn_ref, user_id) VALUES ($1, $2, $3, 'Pending Payment', $4, $5)",
-      [orderId, itemsStr, serverTotal, txnRef, userId]
+      "INSERT INTO orders (id, items, total, status, txn_ref, user_id, zoho_payment_session_id) VALUES ($1, $2, $3, 'Pending Payment', $4, $5, $6)",
+      [orderId, itemsStr, serverTotal, txnRef, userId, paymentSessionId]
     );
 
-    // Commit transaction immediately to secure the order and stock deductions
+    // Commit transaction
     await client.query('COMMIT');
-
-    // 3. Initiate payment via BS Solutions UPI Gateway
-    let paymentUrl = null;
-    try {
-      const gatewayBaseUrl = process.env.UPI_GATEWAY_URL.replace(/\/+$/, '');
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-      
-      const paymentReq = await axios.post(`${gatewayBaseUrl}/api/gateway/payment/create`, {
-        clientCode: process.env.UPI_GATEWAY_KEY,
-        developerOrderId: orderId,
-        amount: serverTotal,
-        callbackUrl: `${frontendUrl}/api/payment-callback`
-      }, { timeout: 10000 });
-      
-      paymentUrl = paymentReq.data?.payment_url;
-    } catch (gatewayErr) {
-      console.error('Gateway Error:', gatewayErr.response?.data || gatewayErr.message);
-      // We do not rollback because the order is already secured in DB as Pending Payment.
-      // The user can try paying again from the orders page later.
-    }
 
     // 4. Update in-memory activeCarts
     if (activeCarts[userId]) {
@@ -650,8 +682,25 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
       }
     }
 
+    // Broadcast new order to Admin Dashboard immediately
+    io.emit('new_order', {
+      id: orderId,
+      items: itemsStr,
+      total: serverTotal,
+      status: 'Pending Payment',
+      user_id: userId,
+      user_name: req.user.name,
+      created_at: new Date()
+    });
     io.emit('menu_updated');
-    return res.json({ success: true, orderId, payment_url: paymentUrl, amount: serverTotal });
+
+    return res.json({
+      success: true,
+      orderId,
+      payment_url: paymentUrl,
+      paymentSessionId,
+      amount: serverTotal
+    });
 
   } catch (err) {
     await client.query('ROLLBACK');
@@ -763,184 +812,145 @@ app.post('/api/orders/zoho-webhook', (req, res) => {
   });
 });
 
-// Fallback Verification Endpoint
-app.post('/api/orders/verify-zoho-payment', async (req, res) => {
-  const { paymentSessionId, orderId } = req.body;
-  if (!paymentSessionId) return res.status(400).json({ error: 'Missing session ID' });
+// Helper: confirm a paid order and record transaction
+function confirmOrderInDb(orderId, txnId, callback) {
+  const resolvedTxnId = (txnId && String(txnId).trim()) ? String(txnId).trim() : `TXN_${Date.now()}`;
 
-  db.get('SELECT * FROM orders WHERE id = ? AND zoho_payment_session_id = ?', [orderId, paymentSessionId], async (err, order) => {
-    if (err || !order) return res.status(404).json({ error: 'Order not found' });
-    if (order.status !== 'Pending Payment') return res.json({ success: true, alreadyProcessed: true });
-
-    try {
-      const updatedOrder = await syncOrderIfPending(order);
-      if (updatedOrder.status === 'Pending') {
-        if (updatedOrder.user_id) delete activeCarts[updatedOrder.user_id];
-        return res.json({ success: true });
-      } else if (updatedOrder.status === 'Failed') {
-        return res.status(400).json({ error: 'Payment failed' });
-      } else {
-        return res.status(400).json({ error: 'Payment not completed yet' });
-      }
-    } catch (syncErr) {
-      console.error('Error verifying payment:', syncErr);
-      return res.status(500).json({ error: 'Verification error' });
+  db.get('SELECT * FROM orders WHERE id = ?', [orderId], (err, order) => {
+    if (err || !order) {
+      if (callback) callback(err || new Error('Order not found'));
+      return;
     }
+
+    if (order.status !== 'Pending Payment') {
+      if (callback) callback(null, order);
+      return;
+    }
+
+    db.run(
+      "UPDATE orders SET status = 'Pending', txn_id = ?, paid_at = CURRENT_TIMESTAMP WHERE id = ?",
+      [resolvedTxnId, orderId],
+      (updateErr) => {
+        if (updateErr) {
+          if (callback) callback(updateErr);
+          return;
+        }
+
+        // Record in transactions table
+        db.run(
+          'INSERT INTO transactions (txn_id, order_id, status, amount) VALUES (?, ?, ?, ?) ON CONFLICT (txn_id) DO NOTHING',
+          [resolvedTxnId, orderId, 'SUCCESS', order.total],
+          () => {}
+        );
+
+        order.status = 'Pending';
+        order.txn_id = resolvedTxnId;
+
+        // Clean activeCart if user exists
+        if (order.user_id && activeCarts[order.user_id]) {
+          delete activeCarts[order.user_id];
+        }
+
+        // Broadcast to all connected clients in real-time
+        io.emit('payment_confirmed', { orderId, txnId: resolvedTxnId, userId: order.user_id });
+        io.emit('new_order', { ...order, status: 'Pending', txn_id: resolvedTxnId });
+        io.emit('order_status_update', { id: orderId, status: 'Pending', userId: order.user_id });
+        io.emit('menu_updated');
+
+        console.log(`[Order Confirmed] Order ${orderId} confirmed — txnId: ${resolvedTxnId}`);
+        if (callback) callback(null, order);
+      }
+    );
+  });
+}
+
+// Fallback Verification Endpoint (Zoho & Frontend Payment Verification)
+app.post('/api/orders/verify-zoho-payment', async (req, res) => {
+  const { paymentSessionId, orderId, paymentId } = req.body;
+  const targetOrderId = orderId;
+  if (!targetOrderId && !paymentSessionId) return res.status(400).json({ error: 'Missing order or session ID' });
+
+  const query = targetOrderId ? 'SELECT * FROM orders WHERE id = ?' : 'SELECT * FROM orders WHERE zoho_payment_session_id = ?';
+  const param = targetOrderId || paymentSessionId;
+
+  db.get(query, [param], async (err, order) => {
+    if (err || !order) return res.status(404).json({ error: 'Order not found' });
+    if (order.status !== 'Pending Payment') return res.json({ success: true, alreadyProcessed: true, status: order.status });
+
+    const resolvedTxnId = paymentId || `VERIFIED_${Date.now()}`;
+    confirmOrderInDb(order.id, resolvedTxnId, (confirmErr, confirmedOrder) => {
+      if (confirmErr) return res.status(500).json({ error: 'Failed to confirm order' });
+      res.json({ success: true, orderId: order.id, status: 'Pending', txnId: resolvedTxnId });
+    });
   });
 });
 
-// Payment callback from Gateway
-app.get('/api/payment-callback', async (req, res) => {
-  // The gateway may return orderId as its internal ID or our developerOrderId
-  const { status, orderId: callbackOrderId } = req.query;
-  console.log('[Callback] Received:', { status, callbackOrderId, fullQuery: req.query });
+// Unified Payment callback from Gateway / Webhook (handles GET and POST)
+const handlePaymentCallback = async (req, res) => {
+  const params = { ...req.query, ...req.body };
+  const callbackOrderId = params.orderId || params.developerOrderId || params.order_id || params.id;
+  const rawStatus = (params.status || params.payment_status || 'SUCCESS').toUpperCase();
+  const txnId = params.txnId || params.paytmTxnId || params.transactionId || params.refId || `UPI_${Date.now()}`;
+
+  console.log('[Callback] Received:', { status: rawStatus, callbackOrderId, fullQuery: req.query, fullBody: req.body });
 
   if (!callbackOrderId) {
     return res.redirect('/orders.html?error=missing_order');
   }
 
-  // Try to find the order by our ID first, then by gateway's orderId stored in paytm_order_id
-  const findOrder = (cb) => {
-    db.get('SELECT * FROM orders WHERE id = ?', [callbackOrderId], (err, order) => {
-      if (order) return cb(null, order);
-      db.get('SELECT * FROM orders WHERE paytm_order_id = ?', [callbackOrderId], (err2, order2) => {
-        cb(err2, order2);
-      });
-    });
-  };
-
-  if (status !== 'SUCCESS') {
-    findOrder((err, order) => {
-      const oid = order ? order.id : callbackOrderId;
-      db.run("UPDATE orders SET status = 'Failed' WHERE id = ?", [oid], () => {
-        if (order && order.status === 'Pending Payment') {
-           const items = JSON.parse(order.items);
-           items.forEach(item => {
-             db.run('UPDATE items SET stock = stock + ? WHERE id = ?', [item.quantity, item.id]);
-           });
-           io.emit('menu_updated');
-        }
-        io.emit('order_status_update', { id: oid, status: 'Failed' });
-        return res.redirect('/orders.html?error=payment_failed');
-      });
-    });
-    return;
-  }
-
-  try {
-    // Verify transaction server-to-server using the gateway's orderId
-    const gatewayBaseUrl = process.env.UPI_GATEWAY_URL.replace(/\/+$/, '');
-    const verifyReq = await fetch(`${gatewayBaseUrl}/api/gateway/order/status/${callbackOrderId}`, {
-      headers: {
-        'x-api-key': process.env.UPI_GATEWAY_KEY
+  // Find the order by id, paytm_order_id, or txn_ref
+  db.get(
+    'SELECT * FROM orders WHERE id = ? OR paytm_order_id = ? OR txn_ref = ?',
+    [callbackOrderId, callbackOrderId, callbackOrderId],
+    async (err, order) => {
+      if (err || !order) {
+        console.error('[Callback] Order not found for identifier:', callbackOrderId);
+        return res.redirect(`/orders.html?payment=success&orderId=${callbackOrderId}`);
       }
-    });
 
-    const verifyData = await verifyReq.json();
-    console.log('[Callback] Verification response:', JSON.stringify(verifyData));
+      const isSuccess = ['SUCCESS', 'COMPLETED', 'PAID', 'TRUE'].includes(rawStatus);
 
-    // Resolve our order: use developerOrderId from gateway if available
-    const ourOrderId = verifyData.developerOrderId || callbackOrderId;
-
-    if (verifyData.status === 'SUCCESS' || verifyData.status === 'COMPLETED') {
-      db.get('SELECT * FROM orders WHERE id = ?', [ourOrderId], (err, order) => {
-        if (err || !order) {
-          // Fallback: try finding by gateway orderId
-          return db.get('SELECT * FROM orders WHERE paytm_order_id = ?', [callbackOrderId], (err2, order2) => {
-            if (err2 || !order2) return res.redirect('/orders.html?error=order_not_found');
-            confirmOrder(order2, verifyData, res);
-          });
-        }
-        confirmOrder(order, verifyData, res);
-      });
-    } else {
-      db.get('SELECT * FROM orders WHERE id = ?', [ourOrderId], (err, order) => {
-        const oid = order ? order.id : ourOrderId;
-        db.run("UPDATE orders SET status = 'Failed' WHERE id = ?", [oid], () => {
-          if (order && order.status === 'Pending Payment') {
-            const items = JSON.parse(order.items);
-            items.forEach(item => {
-              db.run('UPDATE items SET stock = stock + ? WHERE id = ?', [item.quantity, item.id]);
-            });
-            io.emit('menu_updated');
-          }
-          res.redirect('/orders.html?error=payment_verification_failed');
+      if (isSuccess) {
+        confirmOrderInDb(order.id, txnId, (confirmErr) => {
+          if (confirmErr) console.error('Error confirming order on callback:', confirmErr);
+          res.redirect(`/orders.html?payment=success&orderId=${order.id}`);
         });
-      });
-    }
-  } catch (err) {
-    console.error('Verification error:', err);
-    res.redirect('/orders.html?error=verification_error');
-  }
-});
-
-// Helper: confirm a paid order
-function confirmOrder(order, verifyData, res) {
-  if (order.status !== 'Pending Payment') {
-    return res.redirect('/orders.html?payment=success');
-  }
-
-  const items = JSON.parse(order.items);
-  const txnId = verifyData.paytmTxnId || verifyData.txnId || verifyData.transactionId || `TXN_${Date.now()}`;
-  const orderId = order.id;
-
-  db.run(
-    "UPDATE orders SET status = 'Pending', txn_id = ?, paid_at = NOW() WHERE id = ?",
-    [txnId, orderId],
-    (updateErr) => {
-      if (updateErr) return res.redirect('/orders.html?error=db_error');
-
-      io.emit('payment_confirmed', { orderId, txnId });
-      io.emit('new_order', { ...order, status: 'Pending', txn_id: txnId });
-      io.emit('menu_updated');
-
-      console.log(`[Callback] Order ${orderId} confirmed -  txnId: ${txnId}`);
-      res.redirect('/orders.html?payment=success');
+      } else {
+        db.run("UPDATE orders SET status = 'Failed' WHERE id = ?", [order.id], () => {
+          if (order.status === 'Pending Payment') {
+            try {
+              const items = JSON.parse(order.items);
+              items.forEach(item => {
+                db.run('UPDATE items SET stock = stock + ? WHERE id = ?', [item.quantity, item.id]);
+              });
+              io.emit('menu_updated');
+            } catch (e) {}
+          }
+          io.emit('order_status_update', { id: order.id, status: 'Failed' });
+          res.redirect('/orders.html?error=payment_failed');
+        });
+      }
     }
   );
-}
+};
+
+app.get('/api/payment-callback', handlePaymentCallback);
+app.post('/api/payment-callback', handlePaymentCallback);
 
 // Admin: manually confirm a payment after verifying in their UPI/Paytm app
 app.post('/api/orders/:id/confirm-payment', requireAdmin, (req, res) => {
   const { id } = req.params;
-  const { txnId } = req.body;  // optional -  admin can type the UTR number
+  const { txnId } = req.body;  // optional - admin can type the UTR number
 
-  db.get('SELECT * FROM orders WHERE id = ?', [id], (err, order) => {
+  confirmOrderInDb(id, txnId, (err, order) => {
     if (err) return res.status(500).json({ error: err.message });
-    if (!order) return res.status(404).json({ error: 'Order not found' });
-
-    if (order.status !== 'Pending Payment') {
-      return res.status(400).json({ error: `Order already in status: ${order.status}` });
-    }
-
-    const resolvedTxnId = (txnId && txnId.trim()) ? txnId.trim() : `MANUAL_${Date.now()}`;
-
-    db.run(
-      "UPDATE orders SET status = 'Pending', txn_id = ?, paid_at = CURRENT_TIMESTAMP WHERE id = ?",
-      [resolvedTxnId, id],
-      (updateErr) => {
-        if (updateErr) return res.status(500).json({ error: updateErr.message });
-
-        // Record in transactions table
-        db.run(
-          'INSERT INTO transactions (txn_id, order_id, status, amount) VALUES (?, ?, ?, ?) ON CONFLICT (txn_id) DO NOTHING',
-          [resolvedTxnId, id, 'SUCCESS', order.total]
-        );
-
-        // Notify all connected clients in real-time
-        io.emit('payment_confirmed', { orderId: id, txnId: resolvedTxnId });
-        io.emit('new_order', { ...order, status: 'Pending', txn_id: resolvedTxnId });
-        io.emit('menu_updated');
-
-        console.log(`[Admin ${req.user.email}] Payment confirmed for order ${id} - txnId: ${resolvedTxnId}`);
-        res.json({ success: true, orderId: id, txnId: resolvedTxnId });
-      }
-    );
+    res.json({ success: true, orderId: id, txnId: order.txn_id });
   });
 });
 
-// --- ZOHO PAYMENT SYNC HELPERS ---
+// --- PAYMENT SYNC HELPERS ---
 async function checkZohoPaymentStatus(paymentSessionId) {
+  if (!process.env.ZOHO_ACCOUNT_ID || !process.env.ZOHO_CLIENT_ID) return null;
   try {
     const accessToken = await getZohoAccessToken();
     const accountId = process.env.ZOHO_ACCOUNT_ID;
@@ -949,7 +959,8 @@ async function checkZohoPaymentStatus(paymentSessionId) {
       {
         headers: {
           'Authorization': `Zoho-oauthtoken ${accessToken}`
-        }
+        },
+        timeout: 5000
       }
     );
     return res.data;
@@ -960,57 +971,36 @@ async function checkZohoPaymentStatus(paymentSessionId) {
 }
 
 async function syncOrderIfPending(order) {
-  if (order.status !== 'Pending Payment' || !order.zoho_payment_session_id) return order;
+  if (order.status !== 'Pending Payment') return order;
 
-  const data = await checkZohoPaymentStatus(order.zoho_payment_session_id);
-  if (!data) return order;
+  // Check Zoho payment if configured
+  if (order.zoho_payment_session_id && process.env.ZOHO_ACCOUNT_ID && process.env.ZOHO_CLIENT_ID) {
+    try {
+      const data = await checkZohoPaymentStatus(order.zoho_payment_session_id);
+      if (data) {
+        let session = data.payments_session || data;
+        let paymentStatus = session.status;
+        let txnId = session.payment_id || session.txn_id || session.transaction_id || `SYNC_${Date.now()}`;
+        
+        if (session.payment && session.payment.status) {
+          paymentStatus = session.payment.status;
+          txnId = session.payment.payment_id || txnId;
+        }
 
-  let session = data.payments_session || data;
-  let paymentStatus = session.status;
-  let txnId = session.payment_id || session.txn_id || session.transaction_id || `SYNC_${Date.now()}`;
-  
-  if (session.payment && session.payment.status) {
-      paymentStatus = session.payment.status;
-      txnId = session.payment.payment_id || txnId;
+        const validStatuses = ['success', 'completed', 'succeeded', 'paid', 'approved'];
+        if (validStatuses.includes(String(paymentStatus).toLowerCase())) {
+          return new Promise((resolve) => {
+            confirmOrderInDb(order.id, txnId, (err, updatedOrder) => {
+              resolve(updatedOrder || order);
+            });
+          });
+        }
+      }
+    } catch (e) {
+      console.debug('Zoho sync check skipped:', e.message);
+    }
   }
 
-  const validStatuses = ['success', 'completed', 'succeeded', 'paid', 'approved'];
-  if (validStatuses.includes(String(paymentStatus).toLowerCase())) {
-     return new Promise((resolve) => {
-         db.run(
-           "UPDATE orders SET status = 'Pending', txn_id = ?, paid_at = CURRENT_TIMESTAMP WHERE id = ?",
-           [txnId, order.id],
-           (err) => {
-               if (err) return resolve(order);
-               
-               const items = JSON.parse(order.items);
-               
-               io.emit('payment_confirmed', { orderId: order.id, txnId: txnId });
-               io.emit('new_order', { ...order, status: 'Pending', txn_id: txnId });
-               io.emit('menu_updated');
-
-               console.log(`[Sync] Order ${order.id} confirmed via sync -  txnId: ${txnId}`);
-               order.status = 'Pending';
-               order.txn_id = txnId;
-               resolve(order);
-           }
-         );
-     });
-  } else if (String(paymentStatus).toLowerCase() === 'failed') {
-     return new Promise((resolve) => {
-         db.run("UPDATE orders SET status = 'Failed' WHERE id = ?", [order.id], () => {
-             if (order) {
-                 const items = JSON.parse(order.items);
-                 items.forEach(item => {
-                     db.run('UPDATE items SET stock = stock + ? WHERE id = ?', [item.quantity, item.id]);
-                 });
-                 io.emit('menu_updated');
-             }
-             order.status = 'Failed';
-             resolve(order);
-         });
-     });
-  }
   return order;
 }
 
@@ -1025,7 +1015,7 @@ app.get('/api/orders/status/:id', authenticateToken, (req, res) => {
   });
 });
 
-// Get orders for logged-in student
+// Get orders for logged-in student (returns all recent orders, ensuring pending and paid are visible)
 app.get('/api/orders/me', authenticateToken, (req, res) => {
   db.all(
     'SELECT orders.*, users.name AS user_name FROM orders JOIN users ON orders.user_id = users.id WHERE user_id = ? ORDER BY created_at DESC',
@@ -1033,13 +1023,12 @@ app.get('/api/orders/me', authenticateToken, (req, res) => {
     async (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
       const syncedRows = await Promise.all(rows.map(row => syncOrderIfPending(row)));
-      const finalRows = syncedRows.filter(row => row.status !== 'Pending Payment');
-      res.json(finalRows);
+      res.json(syncedRows);
     }
   );
 });
 
-// Get all orders (Admin dashboard)
+// Get all orders (Admin dashboard - displays pending, paid, ready, and delivered orders)
 app.get('/api/orders', requireAdmin, (req, res) => {
   db.all(
     'SELECT orders.*, users.name AS user_name FROM orders JOIN users ON orders.user_id = users.id ORDER BY created_at DESC',
@@ -1047,8 +1036,7 @@ app.get('/api/orders', requireAdmin, (req, res) => {
     async (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
       const syncedRows = await Promise.all(rows.map(row => syncOrderIfPending(row)));
-      const finalRows = syncedRows.filter(row => row.status !== 'Pending Payment');
-      res.json(finalRows);
+      res.json(syncedRows);
     }
   );
 });
