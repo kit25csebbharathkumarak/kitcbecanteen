@@ -165,7 +165,8 @@ const getZohoAccessToken = async () => {
 // --- HELMET + CORS + STATIC FILES ---
 app.use(helmet({
   contentSecurityPolicy: false, // Allows inline scripts/resources used by frontend
-  crossOriginEmbedderPolicy: false
+  crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" } // Allows Google OAuth popup to postMessage to parent
 }));
 app.use(cors());
 app.use(express.static(path.join(__dirname, '../frontend')));
