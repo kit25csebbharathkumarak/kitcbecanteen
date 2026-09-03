@@ -139,6 +139,28 @@ const initializeDatabase = async () => {
     )
   `);
 
+  // Bulk Orders table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS bulk_orders (
+      id                  TEXT PRIMARY KEY,
+      user_id             INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      event_name          TEXT NOT NULL,
+      event_date          DATE NOT NULL,
+      event_time          TEXT NOT NULL,
+      headcount           INTEGER NOT NULL,
+      items               TEXT NOT NULL,
+      custom_requirements TEXT,
+      contact_name        TEXT NOT NULL,
+      contact_phone       TEXT NOT NULL,
+      delivery_location   TEXT NOT NULL,
+      estimated_total     NUMERIC NOT NULL DEFAULT 0,
+      final_price         NUMERIC,
+      status              TEXT NOT NULL DEFAULT 'Pending Review',
+      admin_notes         TEXT,
+      created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   // Seed menu items if empty
   const itemsCount = await pool.query('SELECT COUNT(*)::int AS count FROM items');
   if (parseInt(itemsCount.rows[0].count, 10) === 0) {

@@ -1178,6 +1178,184 @@ app.get('/api/items/stats', requireAdmin, (req, res) => {
   });
 });
 
+// ─── BULK & CUSTOMIZED CATERING ORDERS ──────────────────────────────────────
+
+// Create a bulk order (Authenticated Student / Staff / Organizer)
+app.post('/api/bulk-orders/create', authenticateToken, (req, res) => {
+  const {
+    event_name,
+    event_date,
+    event_time,
+    headcount,
+    items,
+    custom_requirements,
+    contact_name,
+    contact_phone,
+    delivery_location,
+    estimated_total
+  } = req.body;
+
+  if (!event_name || !event_date || !event_time || !headcount || !contact_name || !contact_phone || !delivery_location) {
+    return res.status(400).json({ error: 'Please fill in all required event details and contact information.' });
+  }
+
+  const parsedHeadcount = parseInt(headcount, 10);
+  if (isNaN(parsedHeadcount) || parsedHeadcount <= 0) {
+    return res.status(400).json({ error: 'Headcount must be a positive number.' });
+  }
+
+  const id = `BULK_${Date.now()}`;
+  const itemsJson = typeof items === 'string' ? items : JSON.stringify(items || []);
+  const parsedEstimatedTotal = parseFloat(estimated_total) || 0;
+
+  db.run(
+    `INSERT INTO bulk_orders (
+      id, user_id, event_name, event_date, event_time, headcount,
+      items, custom_requirements, contact_name, contact_phone,
+      delivery_location, estimated_total, status
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending Review')`,
+    [
+      id,
+      req.user.id,
+      event_name.trim(),
+      event_date,
+      event_time.trim(),
+      parsedHeadcount,
+      itemsJson,
+      (custom_requirements || '').trim(),
+      contact_name.trim(),
+      contact_phone.trim(),
+      delivery_location.trim(),
+      parsedEstimatedTotal
+    ],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+
+      // Notify Admin via Socket.IO
+      io.emit('new_bulk_order', {
+        id,
+        event_name: event_name.trim(),
+        headcount: parsedHeadcount,
+        event_date,
+        event_time: event_time.trim(),
+        contact_name: contact_name.trim(),
+        contact_phone: contact_phone.trim(),
+        delivery_location: delivery_location.trim(),
+        estimated_total: parsedEstimatedTotal,
+        items: items || [],
+        user_name: req.user.name || 'Student'
+      });
+
+      res.status(201).json({
+        success: true,
+        id,
+        message: 'Bulk catering request submitted successfully! The canteen admin will review and quote.'
+      });
+    }
+  );
+});
+
+// View my bulk orders (Authenticated Student)
+app.get('/api/bulk-orders/me', authenticateToken, (req, res) => {
+  db.all(
+    `SELECT * FROM bulk_orders WHERE user_id = ? ORDER BY created_at DESC`,
+    [req.user.id],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows || []);
+    }
+  );
+});
+
+// View all bulk orders (Admin)
+app.get('/api/bulk-orders', requireAdmin, (req, res) => {
+  db.all(
+    `SELECT bulk_orders.*, users.name AS user_name, users.email AS user_email
+     FROM bulk_orders
+     LEFT JOIN users ON bulk_orders.user_id = users.id
+     ORDER BY bulk_orders.created_at DESC`,
+    [],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows || []);
+    }
+  );
+});
+
+// Get specific bulk order (Admin or Owner)
+app.get('/api/bulk-orders/:id', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  db.get(
+    `SELECT bulk_orders.*, users.name AS user_name, users.email AS user_email
+     FROM bulk_orders
+     LEFT JOIN users ON bulk_orders.user_id = users.id
+     WHERE bulk_orders.id = ?`,
+    [id],
+    (err, row) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!row) return res.status(404).json({ error: 'Bulk order not found.' });
+
+      if (req.user.role !== 'admin' && row.user_id !== req.user.id) {
+        return res.status(403).json({ error: 'Unauthorized to view this bulk order.' });
+      }
+
+      res.json(row);
+    }
+  );
+});
+
+// Update bulk order status, final quote price, & notes (Admin)
+app.put('/api/bulk-orders/:id/status', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const { status, final_price, admin_notes } = req.body;
+
+  if (!status) {
+    return res.status(400).json({ error: 'Status is required.' });
+  }
+
+  db.get('SELECT * FROM bulk_orders WHERE id = ?', [id], (findErr, current) => {
+    if (findErr) return res.status(500).json({ error: findErr.message });
+    if (!current) return res.status(404).json({ error: 'Bulk order not found.' });
+
+    const newFinalPrice = final_price !== undefined && final_price !== null && final_price !== ''
+      ? parseFloat(final_price)
+      : current.final_price;
+
+    const newAdminNotes = admin_notes !== undefined ? admin_notes : current.admin_notes;
+
+    db.run(
+      `UPDATE bulk_orders
+       SET status = ?, final_price = ?, admin_notes = ?
+       WHERE id = ?`,
+      [status, newFinalPrice, newAdminNotes, id],
+      function (updateErr) {
+        if (updateErr) return res.status(500).json({ error: updateErr.message });
+
+        // Broadcast status update to student
+        io.emit('bulk_order_status_update', {
+          id,
+          userId: current.user_id,
+          status,
+          final_price: newFinalPrice,
+          admin_notes: newAdminNotes,
+          event_name: current.event_name
+        });
+
+        res.json({
+          success: true,
+          message: `Bulk order updated to "${status}".`,
+          order: {
+            id,
+            status,
+            final_price: newFinalPrice,
+            admin_notes: newAdminNotes
+          }
+        });
+      }
+    );
+  });
+});
+
 // --- DAILY ORDERS CLEANUP ---
 // Only prune delivered or failed orders so pending orders past midnight are not lost
 function cleanupDailyOrders() {
