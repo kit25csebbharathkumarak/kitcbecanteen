@@ -151,25 +151,31 @@ const initializeDatabase = async () => {
     console.log('Database seeded with default menu items.');
   }
 
-  // Seed admin user if none exists
-  const adminCount = await pool.query("SELECT COUNT(*)::int AS count FROM users WHERE role = 'admin'");
-  if (parseInt(adminCount.rows[0].count, 10) === 0) {
-    const adminEmail = process.env.ADMIN_EMAIL || (process.env.NODE_ENV !== 'production' ? 'admin@canteen.com' : null);
-    const adminPassword = process.env.ADMIN_PASSWORD || (process.env.NODE_ENV !== 'production' ? 'admin123' : null);
+  // Initialize or update admin credentials from environment variables
+  const adminIdentifier = (process.env.ADMIN_EMAIL || process.env.ADMIN_USERNAME || process.env.ADMIN_USER || '').trim();
+  const adminPassword = (process.env.ADMIN_PASSWORD || process.env.ADMIN_PASS || '').trim();
 
-    if (adminEmail && adminPassword) {
-      const hash = bcrypt.hashSync(adminPassword, 10);
+  if (adminIdentifier && adminPassword) {
+    const hash = bcrypt.hashSync(adminPassword, 10);
+    const existingAdmin = await pool.query("SELECT id FROM users WHERE role = 'admin' LIMIT 1");
+
+    if (existingAdmin.rows.length === 0) {
       await pool.query(
         'INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4)',
-        ['Admin', adminEmail, hash, 'admin']
+        ['Admin', adminIdentifier, hash, 'admin']
       );
-      if (process.env.NODE_ENV !== 'production') {
-        console.log(`Admin seeded for local development — email: ${adminEmail}`);
-      } else {
-        console.log('Admin account initialized from environment variables.');
-      }
+      console.log('Admin account initialized from environment variables.');
     } else {
-      console.warn('No admin account found and ADMIN_EMAIL / ADMIN_PASSWORD are not set. Skipping automatic admin creation.');
+      await pool.query(
+        'UPDATE users SET name = $1, email = $2, password = $3 WHERE id = $4',
+        ['Admin', adminIdentifier, hash, existingAdmin.rows[0].id]
+      );
+      console.log('Admin account synchronized with environment variables.');
+    }
+  } else {
+    const existingAdmin = await pool.query("SELECT id FROM users WHERE role = 'admin' LIMIT 1");
+    if (existingAdmin.rows.length === 0) {
+      console.warn('NOTICE: No admin credentials provided in environment variables (ADMIN_EMAIL / ADMIN_PASSWORD).');
     }
   }
 

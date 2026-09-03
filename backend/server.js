@@ -311,17 +311,26 @@ app.post('/api/auth/register', authLimiter, (req, res) => {
 });
 
 app.post('/api/auth/login', authLimiter, (req, res) => {
-  const { email, password } = req.body;
-  db.get('SELECT * FROM users WHERE email = ?', [email], (err, user) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (!user) return res.status(400).json({ error: 'Invalid email or password' });
+  const { email, username, password } = req.body;
+  const loginIdentifier = (email || username || '').trim();
+  if (!loginIdentifier || !password) {
+    return res.status(400).json({ error: 'Email or Username and password are required' });
+  }
 
-    const valid = bcrypt.compareSync(password, user.password);
-    if (!valid) return res.status(400).json({ error: 'Invalid email or password' });
+  db.get(
+    'SELECT * FROM users WHERE LOWER(email) = LOWER(?) OR LOWER(name) = LOWER(?)',
+    [loginIdentifier, loginIdentifier],
+    (err, user) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!user) return res.status(400).json({ error: 'Invalid email or password' });
 
-    const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
-  });
+      const valid = bcrypt.compareSync(password, user.password);
+      if (!valid) return res.status(400).json({ error: 'Invalid email or password' });
+
+      const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+      res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+    }
+  );
 });
 
 app.get('/api/auth/google-client-id', (req, res) => {
