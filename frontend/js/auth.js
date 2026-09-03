@@ -218,36 +218,40 @@ async function initGoogleSignIn() {
 initGoogleSignIn();
 
 // --- PASSWORD VISIBILITY TOGGLE ---
-document.addEventListener('DOMContentLoaded', () => {
-  setupPasswordToggles();
-});
+function togglePasswordVisibility(targetId, btn) {
+  const input = document.getElementById(targetId || 'password');
+  if (!input) return;
+  const icon = (btn && btn.querySelector('i')) || document.querySelector(`[data-target="${targetId}"] i`) || document.querySelector('.password-toggle-btn i');
+
+  if (input.type === 'password') {
+    input.type = 'text';
+    if (icon) {
+      icon.className = 'fa-solid fa-eye-slash';
+      icon.style.color = 'var(--primary-color)';
+    }
+  } else {
+    input.type = 'password';
+    if (icon) {
+      icon.className = 'fa-regular fa-eye';
+      icon.style.color = 'var(--text-muted)';
+    }
+  }
+}
+window.togglePasswordVisibility = togglePasswordVisibility;
 
 function setupPasswordToggles() {
   document.querySelectorAll('.password-toggle-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.onclick = function(e) {
+      e.preventDefault();
       const targetId = btn.getAttribute('data-target') || 'password';
-      const input = document.getElementById(targetId);
-      const icon = btn.querySelector('i');
-      if (!input) return;
-
-      if (input.type === 'password') {
-        input.type = 'text';
-        if (icon) {
-          icon.classList.remove('fa-eye', 'fa-regular');
-          icon.classList.add('fa-eye-slash', 'fa-solid');
-          icon.style.color = 'var(--primary-color)';
-        }
-      } else {
-        input.type = 'password';
-        if (icon) {
-          icon.classList.remove('fa-eye-slash', 'fa-solid');
-          icon.classList.add('fa-eye', 'fa-regular');
-          icon.style.color = 'var(--text-muted)';
-        }
-      }
-    });
+      togglePasswordVisibility(targetId, btn);
+    };
   });
 }
 
-setupPasswordToggles();
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', setupPasswordToggles);
+} else {
+  setupPasswordToggles();
+}
 

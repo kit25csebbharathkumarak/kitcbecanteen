@@ -31,7 +31,7 @@
           <label for="password">Password</label>
           <div style="position: relative; display: flex; align-items: center;">
             <input type="password" id="password" required style="padding-right: 2.8rem; width: 100%;">
-            <button type="button" class="password-toggle-btn" data-target="password" style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1.1rem; padding: 4px; display: flex; align-items: center; justify-content: center;" title="Show/Hide Password">
+            <button type="button" class="password-toggle-btn" data-target="password" onclick="togglePasswordVisibility('password', this)" style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1.1rem; padding: 4px; display: flex; align-items: center; justify-content: center;" title="Show/Hide Password">
               <i class="fa-regular fa-eye"></i>
             </button>
           </div>
@@ -73,7 +73,7 @@
     <a href="contact.html" style="color: var(--text-muted); text-decoration: none; font-weight: 500;">Contact Us</a>
   </footer>
 
-  <script src="js/auth.js?v=3"></script>
+  <script src="js/auth.js?v=7"></script>
 </body>
 
 </html>
