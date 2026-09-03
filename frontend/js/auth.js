@@ -217,3 +217,37 @@ async function initGoogleSignIn() {
 
 initGoogleSignIn();
 
+// --- PASSWORD VISIBILITY TOGGLE ---
+document.addEventListener('DOMContentLoaded', () => {
+  setupPasswordToggles();
+});
+
+function setupPasswordToggles() {
+  document.querySelectorAll('.password-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetId = btn.getAttribute('data-target') || 'password';
+      const input = document.getElementById(targetId);
+      const icon = btn.querySelector('i');
+      if (!input) return;
+
+      if (input.type === 'password') {
+        input.type = 'text';
+        if (icon) {
+          icon.classList.remove('fa-eye', 'fa-regular');
+          icon.classList.add('fa-eye-slash', 'fa-solid');
+          icon.style.color = 'var(--primary-color)';
+        }
+      } else {
+        input.type = 'password';
+        if (icon) {
+          icon.classList.remove('fa-eye-slash', 'fa-solid');
+          icon.classList.add('fa-eye', 'fa-regular');
+          icon.style.color = 'var(--text-muted)';
+        }
+      }
+    });
+  });
+}
+
+setupPasswordToggles();
+
