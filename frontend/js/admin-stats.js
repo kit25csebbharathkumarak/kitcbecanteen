@@ -29,6 +29,17 @@ async function fetchItemStats() {
   }
 }
 
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str).replace(/[&<>"']/g, c => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[c]));
+}
+
 function renderItemStats(stats) {
   statsDiv.innerHTML = '';
   const statsArray = Object.entries(stats);
@@ -50,7 +61,7 @@ function renderItemStats(stats) {
     div.style.padding = '1.2rem';
     div.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.8rem;">
-        <h4 style="font-size: 1.2rem;">${stat.name}</h4>
+        <h4 style="font-size: 1.2rem;">${escapeHtml(stat.name)}</h4>
         <div style="font-weight: 800; color: var(--primary-color); font-size: 1.1rem;">₹${stat.totalRevenue.toFixed(2)}</div>
       </div>
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">

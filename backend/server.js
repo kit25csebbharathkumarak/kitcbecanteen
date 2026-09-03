@@ -12,13 +12,18 @@ const QRCode = require('qrcode');
 const axios = require('axios');
 const db = require('./database');
 const { OAuth2Client } = require('google-auth-library');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+
+if (!process.env.JWT_SECRET) {
+  throw new Error('FATAL: JWT_SECRET is required. Set JWT_SECRET in your environment.');
+}
+const JWT_SECRET = process.env.JWT_SECRET;
 
 const app = express();
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
-
-const JWT_SECRET = process.env.JWT_SECRET || 'supersecret_canteen_key';
 
 let isShopOpen = true;
 
@@ -61,36 +66,33 @@ io.on('connection', (socket) => {
 
   socket.on('update_cart', (data) => {
     const { itemId, change } = data;
-    
-    db.get('SELECT * FROM items WHERE id = ?', [itemId], (err, item) => {
-      if (err || !item) return socket.emit('cart_error', 'Item not found');
-      
-      if (change > 0) {
-        if (item.stock < change) {
-          return socket.emit('cart_error', `Only ${item.stock} units available.`);
+    if (!itemId || typeof change !== 'number' || change === 0) return;
+
+    if (change > 0) {
+      // Atomic conditional decrement: only decrement if available stock >= change
+      db.run('UPDATE items SET stock = stock - ? WHERE id = ? AND stock >= ?', [change, itemId, change], (err, info) => {
+        if (err) return socket.emit('cart_error', 'Database error');
+        if (!info || info.changes === 0) {
+          return socket.emit('cart_error', 'Insufficient stock available.');
         }
-        db.run('UPDATE items SET stock = stock - ? WHERE id = ?', [change, itemId], (err) => {
+        activeCarts[userId][itemId] = (activeCarts[userId][itemId] || 0) + change;
+        io.emit('menu_updated');
+        socket.emit('cart_updated', activeCarts[userId]);
+      });
+    } else if (change < 0) {
+      const currentInCart = activeCarts[userId][itemId] || 0;
+      const removeAmt = Math.min(Math.abs(change), currentInCart);
+      if (removeAmt > 0) {
+        db.run('UPDATE items SET stock = stock + ? WHERE id = ?', [removeAmt, itemId], (err) => {
           if (!err) {
-            activeCarts[userId][itemId] = (activeCarts[userId][itemId] || 0) + change;
+            activeCarts[userId][itemId] -= removeAmt;
+            if (activeCarts[userId][itemId] <= 0) delete activeCarts[userId][itemId];
             io.emit('menu_updated');
-            // Emit to this specific socket (since they all connect under their own id but share userId cart)
             socket.emit('cart_updated', activeCarts[userId]);
           }
         });
-      } else if (change < 0) {
-        const removeAmt = Math.min(Math.abs(change), activeCarts[userId][itemId] || 0);
-        if (removeAmt > 0) {
-          db.run('UPDATE items SET stock = stock + ? WHERE id = ?', [removeAmt, itemId], (err) => {
-            if (!err) {
-              activeCarts[userId][itemId] -= removeAmt;
-              if (activeCarts[userId][itemId] <= 0) delete activeCarts[userId][itemId];
-              io.emit('menu_updated');
-              socket.emit('cart_updated', activeCarts[userId]);
-            }
-          });
-        }
       }
-    });
+    }
   });
 
   socket.on('disconnect', () => {
@@ -160,17 +162,39 @@ const getZohoAccessToken = async () => {
 };
 
 
-// --- CORS + STATIC FILES ---
+// --- HELMET + CORS + STATIC FILES ---
+app.use(helmet({
+  contentSecurityPolicy: false, // Allows inline scripts/resources used by frontend
+  crossOriginEmbedderPolicy: false
+}));
 app.use(cors());
 app.use(express.static(path.join(__dirname, '../frontend')));
 
-// --- GLOBAL JSON PARSER ---
+// --- GLOBAL JSON PARSER (limit payload size) ---
 app.use(express.json({
+  limit: '1mb',
   verify: (req, res, buf) => {
     req.rawBody = buf;
   }
 }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// --- RATE LIMITERS ---
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 25, // limit each IP to 25 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many authentication attempts, please try again later.' }
+});
+
+const otpLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 10, // limit each IP to 10 OTP requests per 10 mins
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many OTP requests from this IP. Please try again after 10 minutes.' }
+});
 
 // --- AUTH MIDDLEWARE ---
 function authenticateToken(req, res, next) {
@@ -192,21 +216,32 @@ function requireAdmin(req, res, next) {
 }
 
 // --- AUTH ROUTES ---
-const otps = new Map();
+const otps = new Map(); // email -> { otp, expiresAt }
 
-app.post('/api/auth/send-otp', async (req, res) => {
+// Opportunistic cleanup of expired OTPs to prevent memory leak
+function pruneExpiredOtps() {
+  const now = Date.now();
+  for (const [email, data] of otps.entries()) {
+    if (now > data.expiresAt) {
+      otps.delete(email);
+    }
+  }
+}
+setInterval(pruneExpiredOtps, 5 * 60 * 1000); // Clean every 5 minutes
+
+app.post('/api/auth/send-otp', otpLimiter, async (req, res) => {
   const { email } = req.body;
-  if (!email) return res.status(400).json({ error: 'Email is required' });
+  if (!email || typeof email !== 'string') return res.status(400).json({ error: 'Valid email is required' });
 
   // Generate 6-digit numeric OTP
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
   const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
 
-  otps.set(email.toLowerCase(), { otp, expiresAt });
+  otps.set(email.toLowerCase().trim(), { otp, expiresAt });
 
   try {
     const templateParams = {
-      to_email: email,
+      to_email: email.trim(),
       otp: otp,
       message: `Your One-Time Password (OTP) for SRI CUMIN SEEDS CATERING SERVICES is: ${otp}. It is valid for 5 minutes.`
     };
@@ -228,26 +263,34 @@ app.post('/api/auth/send-otp', async (req, res) => {
   }
 });
 
-app.post('/api/auth/register', (req, res) => {
-  const { name, email, password, otp } = req.body;
+app.post('/api/auth/register', authLimiter, (req, res) => {
+  let { name, email, password, otp } = req.body;
   if (!name || !email || !password || !otp) return res.status(400).json({ error: 'Missing fields' });
 
-  const storedOtpData = otps.get(email.toLowerCase());
+  // Sanitize name: string, max 60 chars, strip dangerous HTML angle brackets
+  if (typeof name !== 'string') return res.status(400).json({ error: 'Invalid name format' });
+  name = name.trim().replace(/[<>]/g, '');
+  if (name.length === 0 || name.length > 60) {
+    return res.status(400).json({ error: 'Name must be between 1 and 60 characters and contain no HTML tags.' });
+  }
+
+  email = String(email).toLowerCase().trim();
+  const storedOtpData = otps.get(email);
   if (!storedOtpData) {
     return res.status(400).json({ error: 'No verification code sent for this email.' });
   }
 
-  if (storedOtpData.otp !== otp) {
+  if (storedOtpData.otp !== String(otp).trim()) {
     return res.status(400).json({ error: 'Invalid verification code.' });
   }
 
   if (Date.now() > storedOtpData.expiresAt) {
-    otps.delete(email.toLowerCase());
+    otps.delete(email);
     return res.status(400).json({ error: 'Verification code has expired.' });
   }
 
   // OTP verified, remove it
-  otps.delete(email.toLowerCase());
+  otps.delete(email);
 
   const hash = bcrypt.hashSync(password, 10);
   db.run(
@@ -267,7 +310,7 @@ app.post('/api/auth/register', (req, res) => {
   );
 });
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', authLimiter, (req, res) => {
   const { email, password } = req.body;
   db.get('SELECT * FROM users WHERE email = ?', [email], (err, user) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -330,7 +373,7 @@ app.post('/api/auth/google', async (req, res) => {
   }
 });
 
-app.post('/api/auth/forgot-password', (req, res) => {
+app.post('/api/auth/forgot-password', authLimiter, (req, res) => {
   const { email } = req.body;
   db.get('SELECT id FROM users WHERE email = ?', [email], (err, user) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -343,7 +386,7 @@ app.post('/api/auth/forgot-password', (req, res) => {
       [resetToken, expiry, user.id], async (err) => {
         if (err) return res.status(500).json({ error: err.message });
 
-        const resetLink = `${req.protocol}:// --- req.get('host')}/reset-password.html?token=${resetToken ---
+        const resetLink = `${req.protocol}://${req.get('host')}/reset-password.html?token=${resetToken}`;
         try {
           const templateParams = {
             to_email: email,
@@ -403,28 +446,52 @@ app.get('/api/items', authenticateToken, (req, res) => {
 });
 
 app.post('/api/items', requireAdmin, (req, res) => {
-  const { name, price, image, available, stock } = req.body;
+  let { name, price, image, available, stock } = req.body;
+  if (!name || typeof name !== 'string' || !name.trim()) {
+    return res.status(400).json({ error: 'Valid item name is required' });
+  }
+  const numericPrice = parseFloat(price);
+  if (isNaN(numericPrice) || numericPrice < 0) {
+    return res.status(400).json({ error: 'Price must be a non-negative number' });
+  }
+  const numericStock = parseInt(stock, 10);
+  if (isNaN(numericStock) || numericStock < 0) {
+    return res.status(400).json({ error: 'Stock must be a non-negative integer' });
+  }
+
   db.run(
     'INSERT INTO items (name, price, image, available, stock) VALUES (?, ?, ?, ?, ?) RETURNING id',
-    [name, price, image, available === undefined ? true : !!available, stock || 0],
+    [name.trim(), numericPrice, image || '', available === undefined ? true : !!available, numericStock],
     function (err, info) {
       if (err) return res.status(500).json({ error: err.message });
       io.emit('menu_updated');
-      res.json({ id: info?.lastID || this?.lastID });
+      res.json({ id: info?.lastID ?? null });
     }
   );
 });
 
 app.put('/api/items/:id', requireAdmin, (req, res) => {
-  const { name, price, image, available, stock } = req.body;
+  let { name, price, image, available, stock } = req.body;
   const { id } = req.params;
+  if (!name || typeof name !== 'string' || !name.trim()) {
+    return res.status(400).json({ error: 'Valid item name is required' });
+  }
+  const numericPrice = parseFloat(price);
+  if (isNaN(numericPrice) || numericPrice < 0) {
+    return res.status(400).json({ error: 'Price must be a non-negative number' });
+  }
+  const numericStock = parseInt(stock, 10);
+  if (isNaN(numericStock) || numericStock < 0) {
+    return res.status(400).json({ error: 'Stock must be a non-negative integer' });
+  }
+
   db.run(
     'UPDATE items SET name=?, price=?, image=?, available=?, stock=? WHERE id=?',
-    [name, price, image, available === undefined ? true : !!available, stock || 0, id],
+    [name.trim(), numericPrice, image || '', available === undefined ? true : !!available, numericStock, id],
     function (err, info) {
       if (err) return res.status(500).json({ error: err.message });
       io.emit('menu_updated');
-      res.json({ updated: info?.changes ?? this?.changes });
+      res.json({ updated: info?.changes ?? 0 });
     }
   );
 });
@@ -434,7 +501,7 @@ app.delete('/api/items/:id', requireAdmin, (req, res) => {
   db.run('DELETE FROM items WHERE id=?', [id], function (err, info) {
     if (err) return res.status(500).json({ error: err.message });
     io.emit('menu_updated');
-    res.json({ deleted: info?.changes ?? this?.changes });
+    res.json({ deleted: info?.changes ?? 0 });
   });
 });
 
@@ -472,52 +539,75 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
   }
   const { items, total } = req.body;
   const userId = req.user.id;
-  const userName = req.user.name || 'Student';
-  const userEmail = req.user.email || 'student@example.com';
 
-  if (!items || !items.length || !total) {
+  if (!items || !Array.isArray(items) || items.length === 0 || !total) {
     return res.status(400).json({ error: 'Invalid order details' });
   }
 
-  // 1. Check stock levels before creating order
-  const placeholders = items.map(() => '?').join(',');
-  const itemIds = items.map(i => i.id);
+  // Acquire a dedicated client for transaction
+  const client = await db.pool.connect();
 
-  db.all(`SELECT id, name, price, image, stock FROM items WHERE id IN (${placeholders})`, itemIds, async (err, rows) => {
-    if (err) return res.status(500).json({ error: 'Database error' });
+  try {
+    await client.query('BEGIN');
+
+    // 1. Fetch item prices and details with row-level locks
+    const itemIds = items.map(i => i.id);
+    const placeholders = itemIds.map((_, i) => `$${i + 1}`).join(',');
+    const itemRes = await client.query(
+      `SELECT id, name, price, image, stock FROM items WHERE id IN (${placeholders}) FOR UPDATE`,
+      itemIds
+    );
+    const rows = itemRes.rows;
 
     let serverTotal = 0;
     const sanitizedItems = [];
 
+    // Calculate serverTotal and validate quantities
     for (const item of items) {
       const dbItem = rows.find(r => r.id === item.id);
       if (!dbItem) {
+        await client.query('ROLLBACK');
         return res.status(400).json({ error: `Item not found: ${item.id}` });
       }
 
-      const reservedQty = (activeCarts[userId] && activeCarts[userId][item.id]) || 0;
-      const unreservedQtyRequired = item.quantity - reservedQty;
-
-      if (dbItem.stock < unreservedQtyRequired) {
-        return res.status(400).json({ error: `Not enough stock for ${dbItem.name}` });
+      const requestedQty = parseInt(item.quantity, 10);
+      if (isNaN(requestedQty) || requestedQty <= 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: `Invalid quantity for ${dbItem.name}` });
       }
-      
-      serverTotal += dbItem.price * item.quantity;
+
+      // If user had items reserved in cart socket, that was already decremented from stock
+      const reservedInCart = (activeCarts[userId] && activeCarts[userId][item.id]) || 0;
+      const additionalRequired = requestedQty - reservedInCart;
+
+      if (additionalRequired > 0) {
+        // Decrement atomically from remaining DB stock
+        const decrRes = await client.query(
+          'UPDATE items SET stock = stock - $1 WHERE id = $2 AND stock >= $1',
+          [additionalRequired, item.id]
+        );
+        if (decrRes.rowCount === 0) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ error: `Not enough stock available for ${dbItem.name}` });
+        }
+      }
+
+      serverTotal += Number(dbItem.price) * requestedQty;
       sanitizedItems.push({
         id: dbItem.id,
         name: dbItem.name,
-        price: dbItem.price,
+        price: Number(dbItem.price),
         image: dbItem.image,
-        quantity: item.quantity
+        quantity: requestedQty
       });
     }
 
-    // 2. Generate unique order ID
     const orderId = 'ORD' + Date.now();
     const txnRef = orderId;
     const itemsStr = JSON.stringify(sanitizedItems);
 
-    // 3. Create Zoho Payment Session
+    // 2. Obtain Zoho Payment Session
+    let paymentSessionId;
     try {
       const accessToken = await getZohoAccessToken();
       const zohoRes = await axios.post(
@@ -530,46 +620,51 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
           headers: {
             'Authorization': `Zoho-oauthtoken ${accessToken}`,
             'Content-Type': 'application/json'
-          }
+          },
+          timeout: 10000
         }
       );
-      
-      const paymentSessionId = zohoRes.data?.payments_session?.payments_session_id || 'dummy_zoho_session_' + Date.now();
-
-      // 4. Save order as 'Pending Payment'
-      db.run(
-        "INSERT INTO orders (id, items, total, status, txn_ref, user_id, zoho_payment_session_id) VALUES (?, ?, ?, 'Pending Payment', ?, ?, ?)",
-        [orderId, itemsStr, serverTotal, txnRef, userId, paymentSessionId],
-        async (insertErr) => {
-          if (insertErr) return res.status(500).json({ error: insertErr.message });
-          
-          if (!activeCarts[userId]) {
-            sanitizedItems.forEach(item => {
-              db.run('UPDATE items SET stock = stock - ? WHERE id = ?', [item.quantity, item.id]);
-            });
-            io.emit('menu_updated');
-          } else {
-            sanitizedItems.forEach(item => {
-              if (activeCarts[userId][item.id]) {
-                activeCarts[userId][item.id] -= item.quantity;
-                if (activeCarts[userId][item.id] <= 0) {
-                  delete activeCarts[userId][item.id];
-                }
-              }
-            });
-            if (Object.keys(activeCarts[userId]).length === 0) {
-              delete activeCarts[userId];
-            }
-          }
-
-          return res.json({ success: true, orderId, paymentSessionId, amount: serverTotal });
-        }
-      );
-    } catch (err) {
-      console.error('Zoho Payments error:', err.response?.data || err.message);
-      return res.status(500).json({ error: 'Failed to initiate payment' });
+      paymentSessionId = zohoRes.data?.payments_session?.payments_session_id || 'dummy_zoho_session_' + Date.now();
+    } catch (zohoErr) {
+      console.error('Zoho Payments error during session creation:', zohoErr.response?.data || zohoErr.message);
+      await client.query('ROLLBACK');
+      return res.status(500).json({ error: 'Failed to initiate payment with Zoho Payments.' });
     }
-  });
+
+    // 3. Insert order row into DB
+    await client.query(
+      "INSERT INTO orders (id, items, total, status, txn_ref, user_id, zoho_payment_session_id) VALUES ($1, $2, $3, 'Pending Payment', $4, $5, $6)",
+      [orderId, itemsStr, serverTotal, txnRef, userId, paymentSessionId]
+    );
+
+    // Commit transaction
+    await client.query('COMMIT');
+
+    // 4. Update in-memory activeCarts
+    if (activeCarts[userId]) {
+      sanitizedItems.forEach(item => {
+        if (activeCarts[userId][item.id]) {
+          activeCarts[userId][item.id] -= item.quantity;
+          if (activeCarts[userId][item.id] <= 0) {
+            delete activeCarts[userId][item.id];
+          }
+        }
+      });
+      if (Object.keys(activeCarts[userId]).length === 0) {
+        delete activeCarts[userId];
+      }
+    }
+
+    io.emit('menu_updated');
+    return res.json({ success: true, orderId, paymentSessionId, amount: serverTotal });
+
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Order creation transaction failed:', err);
+    return res.status(500).json({ error: 'Order creation failed: ' + err.message });
+  } finally {
+    client.release();
+  }
 });
 
 // Zoho Payments Webhook Callback
@@ -578,32 +673,39 @@ app.post('/api/orders/zoho-webhook', (req, res) => {
   console.log('[Zoho Webhook] Received:', payload);
 
   const signingKey = process.env.ZOHO_SIGNING_KEY;
+  if (!signingKey) {
+    console.error('[Zoho Webhook] ERROR: ZOHO_SIGNING_KEY not configured on server.');
+    return res.status(500).json({ error: 'Webhook signature verification not configured' });
+  }
+
   const signatureHeader = req.headers['x-zoho-webhook-signature'];
+  if (!signatureHeader || !req.rawBody) {
+    console.error('[Zoho Webhook] ERROR: Missing signature or raw body.');
+    return res.status(401).json({ error: 'Missing signature or body' });
+  }
 
-  if (signingKey) {
-    if (!signatureHeader || !req.rawBody) {
-      console.error('[Zoho Webhook] ERROR: Missing signature or body.');
-      return res.status(401).json({ error: 'Missing signature' });
+  try {
+    const parts = signatureHeader.split(',');
+    const t = parts[0]?.split('=')[1];
+    const v = parts[1]?.split('=')[1];
+
+    if (!t || !v) {
+      return res.status(401).json({ error: 'Malformed signature header' });
     }
-    try {
-      const parts = signatureHeader.split(',');
-      const t = parts[0].split('=')[1];
-      const v = parts[1].split('=')[1];
 
-      const data = `${t}.${req.rawBody.toString()}`;
-      const expectedSignature = crypto
-        .createHmac('sha256', signingKey)
-        .update(data)
-        .digest('hex');
+    const data = `${t}.${req.rawBody.toString()}`;
+    const expectedSignature = crypto
+      .createHmac('sha256', signingKey)
+      .update(data)
+      .digest('hex');
 
-      if (!crypto.timingSafeEqual(Buffer.from(v), Buffer.from(expectedSignature))) {
-        console.error('[Zoho Webhook] ERROR: Invalid signature.');
-        return res.status(401).json({ error: 'Invalid signature' });
-      }
-    } catch (err) {
-      console.error('[Zoho Webhook] ERROR: Signature verification error:', err.message);
-      return res.status(401).json({ error: 'Signature verification failed' });
+    if (!crypto.timingSafeEqual(Buffer.from(v), Buffer.from(expectedSignature))) {
+      console.error('[Zoho Webhook] ERROR: Invalid signature.');
+      return res.status(401).json({ error: 'Invalid signature' });
     }
+  } catch (err) {
+    console.error('[Zoho Webhook] ERROR: Signature verification error:', err.message);
+    return res.status(401).json({ error: 'Signature verification failed' });
   }
 
   let paymentSessionId = payload.payments_session_id || payload.payment_session_id;
@@ -627,7 +729,6 @@ app.post('/api/orders/zoho-webhook', (req, res) => {
     return res.status(400).json({ error: 'Invalid payment payload or uncompleted payment', receivedStatus: paymentStatus });
   }
 
-
   db.get('SELECT * FROM orders WHERE zoho_payment_session_id = ?', [paymentSessionId], (err, order) => {
     if (err || !order) {
       console.error('[Zoho Webhook] Order not found for session:', paymentSessionId);
@@ -639,22 +740,28 @@ app.post('/api/orders/zoho-webhook', (req, res) => {
       return res.json({ success: true });
     }
 
-    const items = JSON.parse(order.items);
+    const recordedTxnId = txnId || `ZOHO_${Date.now()}`;
 
     db.run(
       "UPDATE orders SET status = 'Pending', txn_id = ?, paid_at = CURRENT_TIMESTAMP WHERE id = ?",
-      [txnId, order.id],
+      [recordedTxnId, order.id],
       (updateErr) => {
         if (updateErr) {
           console.error('[Zoho Webhook] DB Update error:', updateErr.message);
           return res.status(500).json({ error: 'DB Error' });
         }
 
-        io.emit('payment_confirmed', { orderId: order.id, txnId: txnId });
-        io.emit('new_order', { ...order, status: 'Pending', txn_id: txnId });
+        // Record into transactions table for audit and idempotency
+        db.run(
+          'INSERT INTO transactions (txn_id, order_id, status, amount) VALUES (?, ?, ?, ?) ON CONFLICT (txn_id) DO NOTHING',
+          [recordedTxnId, order.id, 'SUCCESS', order.total]
+        );
+
+        io.emit('payment_confirmed', { orderId: order.id, txnId: recordedTxnId });
+        io.emit('new_order', { ...order, status: 'Pending', txn_id: recordedTxnId });
         io.emit('menu_updated');
 
-        console.log(`[Zoho Webhook] Order ${order.id} confirmed -  txnId: ${txnId}`);
+        console.log(`[Zoho Webhook] Order ${order.id} confirmed -  txnId: ${recordedTxnId}`);
         return res.json({ success: true, orderId: order.id });
       }
     );
@@ -812,20 +919,25 @@ app.post('/api/orders/:id/confirm-payment', requireAdmin, (req, res) => {
     }
 
     const resolvedTxnId = (txnId && txnId.trim()) ? txnId.trim() : `MANUAL_${Date.now()}`;
-    const items = JSON.parse(order.items);
 
     db.run(
-      "UPDATE orders SET status = 'Pending', txn_id = ?, paid_at = NOW() WHERE id = ?",
+      "UPDATE orders SET status = 'Pending', txn_id = ?, paid_at = CURRENT_TIMESTAMP WHERE id = ?",
       [resolvedTxnId, id],
       (updateErr) => {
         if (updateErr) return res.status(500).json({ error: updateErr.message });
+
+        // Record in transactions table
+        db.run(
+          'INSERT INTO transactions (txn_id, order_id, status, amount) VALUES (?, ?, ?, ?) ON CONFLICT (txn_id) DO NOTHING',
+          [resolvedTxnId, id, 'SUCCESS', order.total]
+        );
 
         // Notify all connected clients in real-time
         io.emit('payment_confirmed', { orderId: id, txnId: resolvedTxnId });
         io.emit('new_order', { ...order, status: 'Pending', txn_id: resolvedTxnId });
         io.emit('menu_updated');
 
-        console.log(`[Admin] Payment confirmed for order ${id} -  txnId: ${resolvedTxnId}`);
+        console.log(`[Admin ${req.user.email}] Payment confirmed for order ${id} - txnId: ${resolvedTxnId}`);
         res.json({ success: true, orderId: id, txnId: resolvedTxnId });
       }
     );
@@ -946,14 +1058,30 @@ app.get('/api/orders', requireAdmin, (req, res) => {
   );
 });
 
-// Update order status (Admin - e.g. Pending -> Delivered)
+// Update order status (Admin -  e.g. Pending -> Ready for Pickup -> Delivered)
 app.put('/api/orders/:id/status', requireAdmin, (req, res) => {
   const { status } = req.body;
   const { id } = req.params;
-  db.run('UPDATE orders SET status=? WHERE id=?', [status, id], function (err, info) {
+
+  db.get('SELECT user_id, items FROM orders WHERE id=?', [id], (err, order) => {
     if (err) return res.status(500).json({ error: err.message });
-    io.emit('order_status_update', { id, status });
-    res.json({ updated: info?.changes ?? this?.changes });
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    db.run('UPDATE orders SET status=? WHERE id=?', [status, id], function (updateErr, info) {
+      if (updateErr) return res.status(500).json({ error: updateErr.message });
+
+      io.emit('order_status_update', { id, status, userId: order.user_id });
+
+      if (status === 'Ready for Pickup') {
+        io.emit('food_ready', {
+          orderId: id,
+          userId: order.user_id,
+          message: `Your food for Order #${id} is ready for collection at the counter!`
+        });
+      }
+
+      res.json({ updated: info?.changes ?? 0 });
+    });
   });
 });
 
@@ -961,11 +1089,11 @@ app.put('/api/orders/:id/status', requireAdmin, (req, res) => {
 app.delete('/api/orders/delivered', requireAdmin, (req, res) => {
   db.run("DELETE FROM orders WHERE status='Delivered'", [], function (err, info) {
     if (err) return res.status(500).json({ error: err.message });
-    res.json({ deleted: info?.changes ?? this?.changes });
+    res.json({ deleted: info?.changes ?? 0 });
   });
 });
 
-// Get specific order by ID (Admin - for QR scanner)
+// Get specific order by ID (Admin -  for QR scanner)
 app.get('/api/orders/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
   db.get(
@@ -1015,17 +1143,16 @@ app.get('/api/items/stats', requireAdmin, (req, res) => {
 });
 
 // --- DAILY ORDERS CLEANUP ---
+// Only prune delivered or failed orders so pending orders past midnight are not lost
 function cleanupDailyOrders() {
-  const sql = db.isPostgres
-    ? "DELETE FROM orders WHERE created_at < current_date"
-    : "DELETE FROM orders WHERE date(created_at) < date('now','localtime')";
+  const sql = "DELETE FROM orders WHERE created_at < current_date AND status IN ('Delivered', 'Failed')";
 
   db.run(sql, [], function (err, info) {
     if (err) {
       console.error('Cleanup failed:', err.message);
     } else {
-      const changes = info?.changes ?? this?.changes;
-      if (changes > 0) console.log(`Cleaned up ${changes} old order(s).`);
+      const changes = info?.changes ?? 0;
+      if (changes > 0) console.log(`Cleaned up ${changes} completed/failed old order(s).`);
     }
   });
 }

@@ -515,6 +515,141 @@ nav a.active {
   color: #e65100;
 }
 
+.badge.ready-for-pickup {
+  background: #fff8e1;
+  color: #e67e22;
+  border-color: #f39c12;
+  box-shadow: 0 0 10px rgba(243, 156, 18, 0.35);
+  animation: pulseBadge 1.5s infinite;
+}
+
+.order-card.ready-for-pickup {
+  border-left-color: #f39c12;
+  background: #fffdf9;
+  box-shadow: 0 4px 15px rgba(243, 156, 18, 0.2);
+}
+
+@keyframes pulseBadge {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+/* --- TOAST NOTIFICATIONS --- */
+#toast-container {
+  position: fixed;
+  top: 1.5rem;
+  right: 1.5rem;
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  pointer-events: none;
+}
+
+.canteen-toast {
+  pointer-events: auto;
+  min-width: 300px;
+  max-width: 420px;
+  padding: 1rem 1.25rem;
+  border-radius: 14px;
+  background: #ffffff;
+  color: var(--text-main);
+  border: 2px solid var(--text-main);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  animation: slideInRight 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.3s ease;
+}
+
+.canteen-toast.shop-open {
+  border-left: 6px solid #2ecc71;
+}
+
+.canteen-toast.food-ready {
+  border-left: 6px solid #f39c12;
+  background: #fffcf5;
+}
+
+.canteen-toast .toast-icon {
+  font-size: 1.4rem;
+  margin-top: 0.1rem;
+}
+
+.canteen-toast.shop-open .toast-icon { color: #2ecc71; }
+.canteen-toast.food-ready .toast-icon { color: #f39c12; }
+
+.canteen-toast .toast-content {
+  flex: 1;
+}
+
+.canteen-toast .toast-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 0.2rem;
+}
+
+.canteen-toast .toast-body {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.canteen-toast .toast-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0;
+  line-height: 1;
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(60px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* --- FOOD READY ALERT POPUP MODAL --- */
+.food-ready-popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(5px);
+  z-index: 99998;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  animation: fadeIn 0.3s ease;
+}
+
+.food-ready-popup-card {
+  background: #ffffff;
+  border: 3px solid #f39c12;
+  border-radius: 20px;
+  max-width: 480px;
+  width: 90%;
+  padding: 2.2rem 1.8rem;
+  text-align: center;
+  box-shadow: 0 20px 40px rgba(243, 156, 18, 0.25);
+  animation: popUpScale 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes popUpScale {
+  from { transform: scale(0.85); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
 .badge.failed {
   background: #ffebee;
   color: #c62828;

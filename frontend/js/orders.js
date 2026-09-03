@@ -65,7 +65,107 @@ async function fetchMyOrders() {
   }
 }
 
-function renderOrders() {
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str).replace(/[&<>"']/g, c => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[c]));
+}
+
+function playNotificationSound(type = 'chime') {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = ctx.currentTime;
+
+    if (type === 'food_ready') {
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc1.type = 'triangle';
+      osc2.type = 'sine';
+
+      osc1.frequency.setValueAtTime(587.33, now);
+      osc1.frequency.exponentialRampToValueAtTime(880, now + 0.15);
+
+      osc2.frequency.setValueAtTime(880, now + 0.2);
+      osc2.frequency.exponentialRampToValueAtTime(1174.66, now + 0.45);
+
+      gain.gain.setValueAtTime(0.25, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.85);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc1.start(now);
+      osc1.stop(now + 0.2);
+      osc2.start(now + 0.2);
+      osc2.stop(now + 0.85);
+    } else {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(523.25, now);
+      osc.frequency.exponentialRampToValueAtTime(783.99, now + 0.25);
+
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.6);
+    }
+  } catch (e) {
+    console.debug('Audio not supported:', e);
+  }
+}
+
+function showToast({ title, message, type = 'food-ready', icon = 'fa-bell-concierge', duration = 8000 }) {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement('div');
+  toast.className = `canteen-toast ${type}`;
+  toast.innerHTML = `
+    <div class="toast-icon"><i class="fa-solid ${icon}"></i></div>
+    <div class="toast-content">
+      <div class="toast-title">${title}</div>
+      <div class="toast-body">${message}</div>
+    </div>
+    <button class="toast-close">&times;</button>
+  `;
+
+  const closeBtn = toast.querySelector('.toast-close');
+  closeBtn.onclick = () => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(60px)';
+    setTimeout(() => toast.remove(), 300);
+  };
+
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    if (toast.parentNode) {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateX(60px)';
+      setTimeout(() => toast.remove(), 300);
+    }
+  }, duration);
+}
+
+function renderMyOrders() {
   userOrdersBoard.innerHTML = '';
 
   if (orders.length === 0) {
@@ -80,6 +180,8 @@ function renderOrders() {
   orders.forEach(order => {
     const items    = JSON.parse(order.items);
     const statusLc = (order.status || '').toLowerCase().replace(/\s+/g, '-');
+    const safeOrderId = escapeHtml(order.id);
+    const isFoodReady = order.status === 'Ready for Pickup';
 
     const div = document.createElement('div');
     div.className = `order-card glass-panel ${statusLc}`;
@@ -91,33 +193,47 @@ function renderOrders() {
     // UPI Transaction ID (if available)
     const txnLine = order.txn_id
       ? `<div style="margin-top:0.6rem;font-size:0.8rem;color:var(--text-muted);font-family:monospace;border:1px dashed var(--text-main);padding:0.2rem 0.5rem;background:var(--bg-color);border-radius:var(--border-radius);display:inline-block;">
-           <i class="fa-solid fa-receipt"></i> UPI Txn ID: ${order.txn_id}
+           <i class="fa-solid fa-receipt"></i> UPI Txn ID: ${escapeHtml(order.txn_id)}
          </div>`
       : '';
 
     headerRow.innerHTML = `
       <div class="order-details">
-        <h4 style="margin-bottom:0.2rem;font-family:monospace;">${order.id}</h4>
-        <div style="font-weight:600;font-size:0.9rem;color:var(--primary-color);margin-bottom:0.8rem;">${order.user_name}</div>
+        <h4 style="margin-bottom:0.2rem;font-family:monospace;">${safeOrderId}</h4>
+        <div style="font-weight:600;font-size:0.9rem;color:var(--primary-color);margin-bottom:0.8rem;">${escapeHtml(order.user_name)}</div>
         <div class="order-items" style="display:flex;flex-direction:column;gap:0.3rem;">
-          ${items.map(i => `<div><strong>${i.quantity}×</strong> ${i.name}</div>`).join('')}
+          ${items.map(i => `<div><strong>${escapeHtml(i.quantity)}×</strong> ${escapeHtml(i.name)}</div>`).join('')}
         </div>
-        <div style="font-weight:700;margin-top:1rem;font-size:1.1rem;">₹${order.total}</div>
+        <div style="font-weight:700;margin-top:1rem;font-size:1.1rem;">₹${escapeHtml(order.total)}</div>
         ${txnLine}
       </div>
       <div>
-        <span class="badge ${statusLc}">${order.status}</span>
+        <span class="badge ${statusLc}">${escapeHtml(order.status)}</span>
       </div>
     `;
 
     div.appendChild(headerRow);
 
-    // Hint for orders still awaiting payment
+    // Call-to-action & Hints
     if (order.status === 'Pending Payment') {
       const note = document.createElement('div');
       note.style.cssText = 'color:var(--text-muted);font-size:0.9rem;margin-top:0.5rem;';
       note.innerHTML = `<i class="fa-solid fa-clock"></i> Waiting for payment confirmation.`;
       div.appendChild(note);
+    } else if (isFoodReady) {
+      // High-visibility prompt when food is ready to collect
+      const readyBanner = document.createElement('div');
+      readyBanner.style.cssText = 'background: #fff8e1; border: 2px solid #f39c12; padding: 0.8rem 1.2rem; border-radius: 8px; width: 100%; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.8rem;';
+      readyBanner.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 0.6rem; color: #d35400; font-weight: 700;">
+          <i class="fa-solid fa-bell-concierge fa-bounce" style="font-size: 1.3rem;"></i>
+          <span>Food Ready for Pickup! Please collect at counter.</span>
+        </div>
+        <button class="btn btn-primary" style="background: #e67e22; border-color: #e67e22; padding: 0.5rem 1.2rem; font-weight: bold;" onclick="showPickupQR('${order.id}')">
+          <i class="fa-solid fa-qrcode"></i> Show Pickup QR
+        </button>
+      `;
+      div.appendChild(readyBanner);
     } else if (order.status === 'PAID' || order.status === 'Pending') {
       const btn = document.createElement('button');
       btn.className = 'btn btn-secondary';
@@ -152,7 +268,37 @@ if (nav) {
 }
 
 // --- Socket Updates ---
-socket.on('order_status_update', () => fetchMyOrders());
+socket.on('order_status_update', (data) => {
+  fetchMyOrders();
+});
+
+socket.on('food_ready', (data) => {
+  if (user && data.userId === user.id) {
+    playNotificationSound('food_ready');
+    showToast({
+      title: '🍽️ Food Ready for Pickup!',
+      message: data.message || `Order #${data.orderId} is ready for collection at the counter.`,
+      type: 'food-ready',
+      icon: 'fa-bell-concierge',
+      duration: 10000
+    });
+    fetchMyOrders();
+  }
+});
+
+socket.on('shop_status_changed', (isOpen) => {
+  if (isOpen) {
+    playNotificationSound('shop_open');
+    showToast({
+      title: '🎉 Canteen is Now Open!',
+      message: 'The kitchen is taking orders. Head over to Menu to order fresh food!',
+      type: 'shop-open',
+      icon: 'fa-store',
+      duration: 7000
+    });
+  }
+});
+
 socket.on('payment_confirmed', () => fetchMyOrders());
 
 // --- Init ---

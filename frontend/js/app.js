@@ -32,18 +32,195 @@ const menuSearchInput   = document.getElementById('menu-search');
 
 // --- Fetch & Render Menu ---
 
+// --- SOUND & TOAST NOTIFICATION HELPERS ---
+function playNotificationSound(type = 'chime') {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = ctx.currentTime;
+
+    if (type === 'food_ready') {
+      // Pleasant double-bell alert chime
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc1.type = 'triangle';
+      osc2.type = 'sine';
+
+      osc1.frequency.setValueAtTime(587.33, now); // D5
+      osc1.frequency.exponentialRampToValueAtTime(880, now + 0.15); // A5
+
+      osc2.frequency.setValueAtTime(880, now + 0.2); // A5
+      osc2.frequency.exponentialRampToValueAtTime(1174.66, now + 0.45); // D6
+
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc1.start(now);
+      osc1.stop(now + 0.2);
+      osc2.start(now + 0.2);
+      osc2.stop(now + 0.8);
+    } else {
+      // Gentle shop-open welcome chime
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(523.25, now); // C5
+      osc.frequency.exponentialRampToValueAtTime(659.25, now + 0.12); // E5
+      osc.frequency.exponentialRampToValueAtTime(783.99, now + 0.25); // G5
+
+      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.6);
+    }
+  } catch (e) {
+    console.debug('Audio notification not supported or blocked by browser policy:', e);
+  }
+}
+
+function showToast({ title, message, type = 'shop-open', icon = 'fa-store', duration = 6000 }) {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement('div');
+  toast.className = `canteen-toast ${type}`;
+  toast.innerHTML = `
+    <div class="toast-icon"><i class="fa-solid ${icon}"></i></div>
+    <div class="toast-content">
+      <div class="toast-title">${title}</div>
+      <div class="toast-body">${message}</div>
+    </div>
+    <button class="toast-close">&times;</button>
+  `;
+
+  const closeBtn = toast.querySelector('.toast-close');
+  closeBtn.onclick = () => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(60px)';
+    setTimeout(() => toast.remove(), 300);
+  };
+
+  container.appendChild(toast);
+
+  // Native notification if permitted
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification(title, { body: message, icon: 'logo.png' });
+  }
+
+  setTimeout(() => {
+    if (toast.parentNode) {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateX(60px)';
+      setTimeout(() => toast.remove(), 300);
+    }
+  }, duration);
+}
+
+function showFoodReadyPopup(orderId, message) {
+  const existing = document.getElementById('food-ready-popup');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'food-ready-popup';
+  overlay.className = 'food-ready-popup-overlay';
+  overlay.innerHTML = `
+    <div class="food-ready-popup-card">
+      <div style="font-size: 3.5rem; color: #f39c12; margin-bottom: 0.8rem;">
+        <i class="fa-solid fa-bell-concierge fa-shake"></i>
+      </div>
+      <h2 style="font-size: 1.8rem; margin-bottom: 0.5rem; color: var(--text-main);">Your Food is Ready!</h2>
+      <p style="font-size: 1.05rem; color: var(--text-muted); margin-bottom: 1.2rem;">
+        ${message || `Order #${orderId} is packed and ready for collection at the counter.`}
+      </p>
+      <div style="font-family: monospace; font-size: 1.15rem; font-weight: 700; background: #fdf5e6; padding: 0.6rem 1rem; border-radius: 8px; display: inline-block; margin-bottom: 1.5rem; border: 1px dashed #f39c12; color: #d35400;">
+        Order ID: ${orderId}
+      </div>
+      <div style="display: flex; gap: 0.8rem; justify-content: center; flex-wrap: wrap;">
+        <a href="orders.html" class="btn btn-primary" style="padding: 0.8rem 1.6rem; font-size: 1rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem; background: #e67e22; border-color: #e67e22;">
+          <i class="fa-solid fa-qrcode"></i> View Pickup QR
+        </a>
+        <button id="close-food-popup" class="btn btn-secondary" style="padding: 0.8rem 1.4rem; font-size: 1rem;">
+          Dismiss
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  document.getElementById('close-food-popup').onclick = () => overlay.remove();
+}
+
+// Request notification permission opportunistically on customer interaction
+if ('Notification' in window && Notification.permission === 'default') {
+  document.addEventListener('click', () => {
+    Notification.requestPermission().catch(() => {});
+  }, { once: true });
+}
+
 // Fetch Shop Status
+let isInitialShopCheck = true;
 fetch(`${API_URL}/shop-status`)
   .then(res => res.json())
   .then(data => {
     shopOpen = data.isOpen;
     updateShopUI();
+    isInitialShopCheck = false;
   })
   .catch(err => console.error('Error fetching shop status:', err));
 
 socket.on('shop_status_changed', (isOpen) => {
+  const previousState = shopOpen;
   shopOpen = isOpen;
   updateShopUI();
+
+  if (!isInitialShopCheck && !previousState && isOpen) {
+    // Transitioned from closed to open: notify customer
+    playNotificationSound('shop_open');
+    showToast({
+      title: '🎉 Canteen is Now Open!',
+      message: 'The kitchen is active and taking orders. Browse today\'s menu and order now!',
+      type: 'shop-open',
+      icon: 'fa-store',
+      duration: 8000
+    });
+  } else if (!isInitialShopCheck && previousState && !isOpen) {
+    showToast({
+      title: 'Shop Closed',
+      message: 'The canteen has closed for new orders.',
+      type: 'shop-open',
+      icon: 'fa-store-slash',
+      duration: 5000
+    });
+  }
+});
+
+socket.on('food_ready', (data) => {
+  if (user && data.userId === user.id) {
+    playNotificationSound('food_ready');
+    showToast({
+      title: '🍽️ Food Ready for Pickup!',
+      message: data.message || `Order #${data.orderId} is ready to collect at the counter.`,
+      type: 'food-ready',
+      icon: 'fa-bell-concierge',
+      duration: 12000
+    });
+    showFoodReadyPopup(data.orderId, data.message);
+  }
 });
 
 function updateShopUI() {
@@ -76,11 +253,26 @@ async function fetchMenu() {
   }
 }
 
-function renderMenu() {
-  // 1. Filter by search query
-  let filtered = menuItems.filter(item =>
-    item.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+const escapeHtml = (str) => {
+  if (str == null) return '';
+  return String(str).replace(/[&<>"']/g, c => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[c]));
+};
+
+function renderMenu(items) {
+  if (items) menuItems = items;
+  
+  const filtered = menuItems.filter(item => {
+    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesFilter = currentFilter === 'all' || 
+                          (currentFilter === 'available' && item.available && item.stock > 0);
+    return matchesSearch && matchesFilter;
+  });
 
   // 3. Sort by Price
   if (currentSort === 'price-asc') {
@@ -92,11 +284,6 @@ function renderMenu() {
   if (filtered.length === 0) {
     menuGrid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:3rem;color:var(--text-muted);">No items found matching the criteria</div>`;
     return;
-  }
-
-  // Clear "No items found" if present
-  if (menuGrid.children.length > 0 && !menuGrid.children[0].classList.contains('menu-item')) {
-    menuGrid.innerHTML = '';
   }
 
   const currentIds = Array.from(menuGrid.children).map(c => c.getAttribute('data-item-id'));
@@ -111,19 +298,24 @@ function renderMenu() {
       div.className = 'menu-item glass-panel';
       div.setAttribute('data-item-id', item.id);
       
+      const safeName = escapeHtml(item.name);
+      const safePrice = escapeHtml(item.price);
+      const safeStock = escapeHtml(item.stock);
+      const safeImg = encodeURI(item.image || '');
+
       div.innerHTML = `
         <div class="item-img-wrap" style="position:relative;">
-          <img src="${item.image}" alt="${item.name}">
+          <img src="${safeImg}" alt="${safeName}">
         </div>
         <div class="item-info">
-          <h3>${item.name}</h3>
-          <div class="item-price">₹${item.price}</div>
+          <h3>${safeName}</h3>
+          <div class="item-price">₹${safePrice}</div>
           <div class="item-stock" style="font-size:0.85rem;color:${item.stock > 0 ? 'var(--text-muted)' : '#ff5252'};font-weight:600;margin-bottom:1rem;">
-            ${item.stock > 0 ? `In Stock: ${item.stock}` : 'Out of Stock'}
+            ${item.stock > 0 ? `In Stock: ${safeStock}` : 'Out of Stock'}
           </div>
         </div>
         <button class="btn btn-secondary btn-add"
-          onclick="addToCart(${item.id})"
+          onclick="addToCart(${escapeHtml(item.id)})"
           ${item.stock <= 0 ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>
           ${item.stock > 0 ? 'Add to Cart' : 'Sold Out'}
         </button>
@@ -187,15 +379,20 @@ function renderCart() {
     total += item.price * item.quantity;
     const div = document.createElement('div');
     div.className = 'cart-item';
+    const safeName = escapeHtml(item.name);
+    const safePrice = escapeHtml(item.price);
+    const safeQty = escapeHtml(item.quantity);
+    const safeId = escapeHtml(id);
+
     div.innerHTML = `
       <div>
-        <div style="font-weight:500;">${item.name}</div>
-        <div style="font-size:0.9rem;color:var(--text-muted)">₹${item.price} × ${item.quantity}</div>
+        <div style="font-weight:500;">${safeName}</div>
+        <div style="font-size:0.9rem;color:var(--text-muted)">₹${safePrice} × ${safeQty}</div>
       </div>
       <div class="cart-item-controls">
-        <button onclick="updateQuantity(${id}, -1)">-</button>
-        <span>${item.quantity}</span>
-        <button onclick="updateQuantity(${id}, 1)">+</button>
+        <button onclick="updateQuantity(${safeId}, -1)">-</button>
+        <span>${safeQty}</span>
+        <button onclick="updateQuantity(${safeId}, 1)">+</button>
       </div>
     `;
     cartItemsContainer.appendChild(div);

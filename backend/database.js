@@ -9,6 +9,10 @@ if (!databaseUrl) {
 const pool = new Pool({
   connectionString: databaseUrl,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  max: parseInt(process.env.PG_MAX_POOL || '20', 10),
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
+  statement_timeout: 10000,
 });
 
 // Convert SQLite-style ? placeholders to PostgreSQL $1, $2, ... style
@@ -20,6 +24,7 @@ const formatQuery = (sql, params = []) => {
 
 const db = {
   isPostgres: true,
+  pool,
   run(sql, params = [], callback) {
     if (typeof params === 'function') { callback = params; params = []; }
     const { sql: formatted, params: converted } = formatQuery(sql, params);
@@ -149,12 +154,23 @@ const initializeDatabase = async () => {
   // Seed admin user if none exists
   const adminCount = await pool.query("SELECT COUNT(*)::int AS count FROM users WHERE role = 'admin'");
   if (parseInt(adminCount.rows[0].count, 10) === 0) {
-    const hash = bcrypt.hashSync('admin123', 10);
-    await pool.query(
-      'INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4)',
-      ['Admin', 'admin@canteen.com', hash, 'admin']
-    );
-    console.log('Admin seeded — email: admin@canteen.com  password: admin123');
+    const adminEmail = process.env.ADMIN_EMAIL || (process.env.NODE_ENV !== 'production' ? 'admin@canteen.com' : null);
+    const adminPassword = process.env.ADMIN_PASSWORD || (process.env.NODE_ENV !== 'production' ? 'admin123' : null);
+
+    if (adminEmail && adminPassword) {
+      const hash = bcrypt.hashSync(adminPassword, 10);
+      await pool.query(
+        'INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4)',
+        ['Admin', adminEmail, hash, 'admin']
+      );
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`Admin seeded for local development — email: ${adminEmail}`);
+      } else {
+        console.log('Admin account initialized from environment variables.');
+      }
+    } else {
+      console.warn('No admin account found and ADMIN_EMAIL / ADMIN_PASSWORD are not set. Skipping automatic admin creation.');
+    }
   }
 
   console.log('Database initialised successfully.');

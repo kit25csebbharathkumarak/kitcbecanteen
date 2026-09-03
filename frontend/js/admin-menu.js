@@ -27,6 +27,17 @@ async function fetchAdminMenu() {
   }
 }
 
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str).replace(/[&<>"']/g, c => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[c]));
+}
+
 function renderAdminMenu(items) {
   adminMenuList.innerHTML = '';
   if (items.length === 0) {
@@ -43,20 +54,24 @@ function renderAdminMenu(items) {
     div.style.justifyContent = 'space-between';
     div.style.alignItems = 'center';
     
+    const safeName = escapeHtml(item.name);
+    const safePrice = escapeHtml(item.price);
+    const safeStock = escapeHtml(item.stock);
+    const safeId = escapeHtml(item.id);
 
     div.innerHTML = `
       <div>
-        <div style="font-weight: 700; font-size: 1.1rem;">${item.name}</div>
+        <div style="font-weight: 700; font-size: 1.1rem;">${safeName}</div>
         <div style="font-size: 0.9rem; color: var(--text-muted); margin-top: 0.2rem;">
-          Price: ₹${item.price} | Stock: <strong>${item.stock}</strong> | 
+          Price: ₹${safePrice} | Stock: <strong>${safeStock}</strong> | 
           Status: <span class="badge ${item.available ? (item.stock > 0 ? 'delivered' : 'pending') : 'pending'}" style="padding: 0.1rem 0.4rem; font-size: 0.7rem;">
             ${item.available ? (item.stock > 0 ? 'Available' : 'Out of Stock') : 'Hidden'}
           </span>
         </div>
       </div>
       <div style="display: flex; gap: 0.5rem;">
-        <button class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="editItem(${item.id})">Edit</button>
-        <button class="btn btn-danger" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="deleteItem(${item.id}, '${item.name}')">Delete</button>
+        <button class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="editItem(${safeId})">Edit</button>
+        <button class="btn btn-danger" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="deleteItem(${safeId}, '${safeName}')">Delete</button>
       </div>
     `;
     adminMenuList.appendChild(div);

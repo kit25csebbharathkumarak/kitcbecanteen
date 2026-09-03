@@ -30,13 +30,25 @@ function onScanSuccess(decodedText) {
   fetchOrderAndFulfill(decodedText);
 }
 
+// --- HTML Sanitization Helper to prevent Stored XSS ---
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str).replace(/[&<>"']/g, c => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[c]));
+}
+
 async function fetchOrderAndFulfill(orderId) {
   try {
-    const res = await fetch(`${API_URL}/orders/${orderId}`, {
+    const res = await fetch(`${API_URL}/orders/${encodeURIComponent(orderId)}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     if (!res.ok) { 
-      scannedOrderDetails.innerHTML = `<div style="color: #c0392b; font-weight: bold; font-size: 1.1rem; padding: 1rem; background: #fadbd8; border-radius: var(--border-radius);"><i class="fa-solid fa-triangle-exclamation"></i> Order not found: ${orderId}</div>`;
+      scannedOrderDetails.innerHTML = `<div style="color: #c0392b; font-weight: bold; font-size: 1.1rem; padding: 1rem; background: #fadbd8; border-radius: var(--border-radius);"><i class="fa-solid fa-triangle-exclamation"></i> Order not found: ${escapeHtml(orderId)}</div>`;
       recentlyScannedContainer.style.display = 'flex';
       
       if (window.scanDismissTimeout) clearTimeout(window.scanDismissTimeout);
@@ -49,7 +61,6 @@ async function fetchOrderAndFulfill(orderId) {
     const order = await res.json();
 
     if (order.status === 'Delivered') {
-      // Do not scan again and do not show popup if already delivered
       return;
     }
 
@@ -58,16 +69,18 @@ async function fetchOrderAndFulfill(orderId) {
     
     // Add success message
     const msgDiv = document.createElement('div');
-    msgDiv.style.cssText = 'color: #27ae60; font-weight: bold; margin-bottom: 1rem; background: #d5f5e3; padding: 0.5rem 1rem; border-radius: var(--border-radius); border-left: 4px solid #27ae60;';
-    msgDiv.innerHTML = `<i class="fa-solid fa-check-circle"></i> Successfully marked Order ${orderId} as Delivered.`;
-    scannedOrderDetails.prepend(msgDiv);
+    msgDiv.className = 'scan-success-message';
+    msgDiv.innerHTML = `<i class="fa-solid fa-check-circle"></i> Successfully marked Order ${escapeHtml(orderId)} as Delivered.`;
+    scannedOrderDetails.appendChild(msgDiv);
 
+    // Call API to update status in DB
     await updateOrderStatus(orderId, 'Delivered');
 
-    setTimeout(() => {
-      const card = document.getElementById(`order-card-${orderId}`);
-      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 500);
+    // Auto dismiss
+    if (window.scanDismissTimeout) clearTimeout(window.scanDismissTimeout);
+    window.scanDismissTimeout = setTimeout(() => {
+      recentlyScannedContainer.style.display = 'none';
+    }, 5000);
   } catch (err) {
     console.error(err);
   }
@@ -76,26 +89,26 @@ async function fetchOrderAndFulfill(orderId) {
 function renderScannedOrderDetails(order) {
   const items    = JSON.parse(order.items);
   const itemsStr = items.map(i =>
-    `<li style="margin-bottom:0.8rem;font-size:2rem;line-height:1.2;"><strong>${i.quantity}×</strong> ${i.name}</li>`
+    `<li style="margin-bottom:0.8rem;font-size:2rem;line-height:1.2;"><strong>${escapeHtml(i.quantity)}×</strong> ${escapeHtml(i.name)}</li>`
   ).join('');
 
   const txnLine = order.txn_id
     ? `<div style="margin-bottom:0.8rem;font-size:0.85rem;color:var(--text-muted);font-family:monospace;border:1px dashed var(--text-main);padding:0.3rem 0.5rem;background:#fff;border-radius:var(--border-radius);display:inline-block;">
-         <i class="fa-solid fa-receipt"></i> UPI Txn ID: ${order.txn_id}
+         <i class="fa-solid fa-receipt"></i> UPI Txn ID: ${escapeHtml(order.txn_id)}
        </div>`
     : '';
 
   scannedOrderDetails.innerHTML = `
     <div style="display:flex;gap:1.5rem;align-items:flex-start;flex-wrap:wrap;">
       <div style="flex:1;min-width:200px;">
-        <div style="font-family:monospace;font-size:0.8rem;margin-bottom:0.2rem;color:var(--text-muted);">Order ID: ${order.id}</div>
-        <div style="font-weight:600;font-size:0.9rem;color:var(--text-muted);margin-bottom:1rem;">Ordered by: ${order.user_name}</div>
+        <div style="font-family:monospace;font-size:0.8rem;margin-bottom:0.2rem;color:var(--text-muted);">Order ID: ${escapeHtml(order.id)}</div>
+        <div style="font-weight:600;font-size:0.9rem;color:var(--text-muted);margin-bottom:1rem;">Ordered by: ${escapeHtml(order.user_name)}</div>
         ${txnLine}
         <ul style="list-style:none;padding:0;color:var(--text-main);">${itemsStr}</ul>
       </div>
       <div style="text-align:right;">
-        <div style="font-size:1.4rem;font-weight:700;color:var(--primary-color);">₹${order.total}</div>
-        <div style="margin-top:0.5rem;"><span class="badge ${(order.status||'').toLowerCase().replace(/\s+/g,'-')}">${order.status}</span></div>
+        <div style="font-size:1.4rem;font-weight:700;color:var(--primary-color);">₹${escapeHtml(order.total)}</div>
+        <div style="margin-top:0.5rem;"><span class="badge ${escapeHtml((order.status||'').toLowerCase().replace(/\s+/g,'-'))}">${escapeHtml(order.status)}</span></div>
       </div>
     </div>
   `;
@@ -113,7 +126,7 @@ function renderScannedOrderDetails(order) {
 // --- Order Status Update ---
 async function updateOrderStatus(id, status) {
   try {
-    await fetch(`${API_URL}/orders/${id}/status`, {
+    await fetch(`${API_URL}/orders/${encodeURIComponent(id)}/status`, {
       method:  'PUT',
       headers: {
         'Content-Type':  'application/json',
@@ -121,22 +134,20 @@ async function updateOrderStatus(id, status) {
       },
       body: JSON.stringify({ status })
     });
+    fetchOrders();
   } catch (err) {
-    console.error('Status update failed:', err);
+    console.error(err);
   }
 }
 window.updateOrderStatus = updateOrderStatus;
 
-// --- Confirm Payment ---Admin manual verification) ---
+// Admin confirms payment manually (e.g. verified in UPI/Paytm app)
 async function confirmPayment(orderId) {
-  const txnId = prompt(
-    `Enter UPI Transaction / UTR number for order ${orderId} (optional — leave blank to auto-generate):`,
-    ''
-  );
-  if (txnId === null) return; // user pressed Cancel
+  const txnId = prompt('Enter UPI Reference / UTR Number (optional, leave blank to auto-generate):');
+  if (txnId === null) return; // User cancelled
 
   try {
-    const res = await fetch(`${API_URL}/orders/${orderId}/confirm-payment`, {
+    const res = await fetch(`${API_URL}/orders/${encodeURIComponent(orderId)}/confirm-payment`, {
       method:  'POST',
       headers: {
         'Content-Type':  'application/json',
@@ -147,25 +158,46 @@ async function confirmPayment(orderId) {
 
     const data = await res.json();
     if (!res.ok) {
-      alert(data.error || 'Failed to confirm payment.');
+      alert(data.error || 'Failed to confirm payment');
       return;
     }
 
-    // UI will update via socket event; just refresh list as backup
     fetchOrders();
   } catch (err) {
-    console.error('Confirm payment error:', err);
-    alert('Network error. Please try again.');
+    console.error('Error confirming payment:', err);
+    alert('Network error while confirming payment');
   }
 }
 window.confirmPayment = confirmPayment;
 
-// --- Fetch --- Render All Orders ---
+// --- Clear Delivered Orders ---
+const clearDeliveredBtn = document.getElementById('clear-delivered-btn');
+if (clearDeliveredBtn) {
+  clearDeliveredBtn.onclick = async () => {
+    if (!confirm('Are you sure you want to clear all delivered orders?')) return;
+    try {
+      await fetch(`${API_URL}/orders/delivered`, {
+        method:  'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      fetchOrders();
+    } catch (err) {
+      console.error('Failed to clear delivered orders:', err);
+    }
+  };
+}
+
+// --- Fetch & Render Orders ---
 async function fetchOrders() {
   try {
     const res = await fetch(`${API_URL}/orders`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
+    if (res.status === 401 || res.status === 403) {
+      localStorage.clear();
+      window.location.href = 'login.html';
+      return;
+    }
     orders = await res.json();
     renderOrders();
   } catch (err) {
@@ -181,7 +213,7 @@ function renderOrders() {
   );
 
   if (filtered.length === 0) {
-    ordersBoard.innerHTML = `<div style="text-align:center;padding:3rem;color:var(--text-muted);">No orders found matching "${searchQuery}"</div>`;
+    ordersBoard.innerHTML = `<div style="text-align:center;padding:3rem;color:var(--text-muted);">No orders found matching "${escapeHtml(searchQuery)}"</div>`;
     return;
   }
 
@@ -192,43 +224,65 @@ function renderOrders() {
 
     const txnLine = order.txn_id
       ? `<div style="margin-top:0.6rem;font-size:0.8rem;color:var(--text-muted);font-family:monospace;border:1px dashed var(--text-main);padding:0.2rem 0.4rem;background:var(--bg-color);border-radius:var(--border-radius);display:inline-block;">
-           <i class="fa-solid fa-receipt"></i> UPI Txn: ${order.txn_id}
+           <i class="fa-solid fa-receipt"></i> UPI Txn: ${escapeHtml(order.txn_id)}
          </div>`
       : '';
 
     // Action buttons per status
     let actionBtns = '';
+    const safeOrderId = escapeHtml(order.id);
     if (order.status === 'Pending Payment') {
       actionBtns = `
         <button class="btn btn-primary"
           style="margin-top:0.6rem;display:block;font-size:0.8rem;padding:0.4rem 0.8rem;background:#2ecc71;border-color:#2ecc71;"
-          onclick="confirmPayment('${order.id}')">
+          onclick="confirmPayment('${safeOrderId}')">
           <i class="fa-solid fa-check"></i> Confirm Payment
         </button>`;
     } else if (order.status === 'Pending') {
       actionBtns = `
-        <button class="btn btn-secondary"
-          style="margin-top:0.5rem;display:block;font-size:0.8rem;padding:0.3rem 0.6rem;"
-          onclick="updateOrderStatus('${order.id}', 'Delivered')">
-          Mark Delivered
-        </button>`;
+        <div style="display:flex;flex-direction:column;gap:0.4rem;margin-top:0.5rem;">
+          <button class="btn btn-primary"
+            style="font-size:0.8rem;padding:0.35rem 0.7rem;background:#e67e22;border-color:#e67e22;"
+            onclick="updateOrderStatus('${safeOrderId}', 'Ready for Pickup')">
+            <i class="fa-solid fa-bell"></i> Food Ready (Alert)
+          </button>
+          <button class="btn btn-secondary"
+            style="font-size:0.8rem;padding:0.3rem 0.6rem;"
+            onclick="updateOrderStatus('${safeOrderId}', 'Delivered')">
+            <i class="fa-solid fa-check"></i> Mark Delivered
+          </button>
+        </div>`;
+    } else if (order.status === 'Ready for Pickup') {
+      actionBtns = `
+        <div style="display:flex;flex-direction:column;gap:0.4rem;margin-top:0.5rem;">
+          <button class="btn btn-secondary"
+            style="font-size:0.78rem;padding:0.3rem 0.6rem;background:#27ae60;border-color:#27ae60;color:#fff;"
+            onclick="updateOrderStatus('${safeOrderId}', 'Delivered')">
+            <i class="fa-solid fa-circle-check"></i> Mark Delivered
+          </button>
+          <button class="btn btn-secondary"
+            style="font-size:0.75rem;padding:0.25rem 0.5rem;opacity:0.85;"
+            onclick="updateOrderStatus('${safeOrderId}', 'Ready for Pickup')">
+            <i class="fa-solid fa-bell"></i> Re-alert Customer
+          </button>
+        </div>`;
     }
 
     const div = document.createElement('div');
-    div.id        = `order-card-${order.id}`;
+    div.id        = `order-card-${safeOrderId}`;
     div.className = `order-card glass-panel ${statusLc} ${isHighlight ? 'highlight' : ''}`;
     div.innerHTML = `
       <div class="order-details">
-        <h4 style="margin-bottom:0.2rem;">${order.id}</h4>
-        <div style="font-weight:600;font-size:0.9rem;color:var(--primary-color);margin-bottom:0.5rem;">${order.user_name}</div>
+        <h4 style="margin-bottom:0.2rem;">${safeOrderId}</h4>
+        <div style="font-weight:600;font-size:0.9rem;color:var(--primary-color);margin-bottom:0.5rem;">${escapeHtml(order.user_name)}</div>
         <div class="order-items" style="display:flex;flex-direction:column;gap:0.2rem;">
-          ${items.map(i => `<div>• ${i.quantity}× ${i.name}</div>`).join('')}
+          ${items.map(i => `<div>• ${escapeHtml(i.quantity)}× ${escapeHtml(i.name)}</div>`).join('')}
         </div>
-        <div style="font-weight:700;margin-top:0.8rem;font-size:1.1rem;">₹${order.total}</div>
+        <div style="font-weight:700;margin-top:0.8rem;font-size:1.1rem;">₹${escapeHtml(order.total)}</div>
         ${txnLine}
       </div>
       <div style="text-align:right;">
-        <span class="badge ${statusLc}">${order.status}</span>
+        <span class="badge ${statusLc}">${escapeHtml(order.status)}</span>
         ${actionBtns}
       </div>
     `;
