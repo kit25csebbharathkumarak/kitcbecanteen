@@ -215,6 +215,20 @@ function requireAdmin(req, res, next) {
   });
 }
 
+function optionalAuth(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) {
+    req.user = null;
+    return next();
+  }
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (!err) req.user = user;
+    else req.user = null;
+    next();
+  });
+}
+
 // --- AUTH ROUTES ---
 const otps = new Map(); // email -> { otp, expiresAt }
 
@@ -1180,8 +1194,8 @@ app.get('/api/items/stats', requireAdmin, (req, res) => {
 
 // ─── BULK & CUSTOMIZED CATERING ORDERS ──────────────────────────────────────
 
-// Create a bulk order (Authenticated Student / Staff / Organizer)
-app.post('/api/bulk-orders/create', authenticateToken, (req, res) => {
+// Create a bulk order (Guests or Authenticated Users)
+app.post('/api/bulk-orders/create', optionalAuth, (req, res) => {
   const {
     event_name,
     event_date,
@@ -1207,6 +1221,8 @@ app.post('/api/bulk-orders/create', authenticateToken, (req, res) => {
   const id = `BULK_${Date.now()}`;
   const itemsJson = typeof items === 'string' ? items : JSON.stringify(items || []);
   const parsedEstimatedTotal = parseFloat(estimated_total) || 0;
+  const userId = req.user ? req.user.id : null;
+  const userName = req.user ? req.user.name : contact_name.trim();
 
   db.run(
     `INSERT INTO bulk_orders (
@@ -1216,7 +1232,7 @@ app.post('/api/bulk-orders/create', authenticateToken, (req, res) => {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending Review')`,
     [
       id,
-      req.user.id,
+      userId,
       event_name.trim(),
       event_date,
       event_time.trim(),
@@ -1243,7 +1259,7 @@ app.post('/api/bulk-orders/create', authenticateToken, (req, res) => {
         delivery_location: delivery_location.trim(),
         estimated_total: parsedEstimatedTotal,
         items: items || [],
-        user_name: req.user.name || 'Student'
+        user_name: userName
       });
 
       res.status(201).json({
@@ -1255,11 +1271,28 @@ app.post('/api/bulk-orders/create', authenticateToken, (req, res) => {
   );
 });
 
-// View my bulk orders (Authenticated Student)
+// View my bulk orders (Authenticated Users)
 app.get('/api/bulk-orders/me', authenticateToken, (req, res) => {
   db.all(
     `SELECT * FROM bulk_orders WHERE user_id = ? ORDER BY created_at DESC`,
     [req.user.id],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows || []);
+    }
+  );
+});
+
+// View guest bulk orders by IDs (No login required)
+app.get('/api/bulk-orders/guest', (req, res) => {
+  const idsParam = req.query.ids || '';
+  const idList = idsParam.split(',').map(s => s.trim()).filter(Boolean);
+  if (idList.length === 0) return res.json([]);
+
+  const placeholders = idList.map(() => '?').join(',');
+  db.all(
+    `SELECT * FROM bulk_orders WHERE id IN (${placeholders}) ORDER BY created_at DESC`,
+    idList,
     (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
       res.json(rows || []);
@@ -1282,8 +1315,8 @@ app.get('/api/bulk-orders', requireAdmin, (req, res) => {
   );
 });
 
-// Get specific bulk order (Admin or Owner)
-app.get('/api/bulk-orders/:id', authenticateToken, (req, res) => {
+// Get specific bulk order (Admin, Owner, or Guest with ID)
+app.get('/api/bulk-orders/:id', optionalAuth, (req, res) => {
   const { id } = req.params;
   db.get(
     `SELECT bulk_orders.*, users.name AS user_name, users.email AS user_email
@@ -1294,10 +1327,6 @@ app.get('/api/bulk-orders/:id', authenticateToken, (req, res) => {
     (err, row) => {
       if (err) return res.status(500).json({ error: err.message });
       if (!row) return res.status(404).json({ error: 'Bulk order not found.' });
-
-      if (req.user.role !== 'admin' && row.user_id !== req.user.id) {
-        return res.status(403).json({ error: 'Unauthorized to view this bulk order.' });
-      }
 
       res.json(row);
     }

@@ -2,12 +2,8 @@ const API_URL = `${window.location.origin}/api`;
 const token   = localStorage.getItem('token');
 const user    = JSON.parse(localStorage.getItem('user') || 'null');
 
-if (!token || !user) {
-  window.location.href = 'login.html';
-}
-
 const socket = io({
-  auth: { token }
+  auth: token ? { token } : {}
 });
 
 // State
@@ -34,9 +30,37 @@ const modalOrderId        = document.getElementById('modal-order-id');
 const modalContentBody    = document.getElementById('modal-content-body');
 const submitBulkBtn       = document.getElementById('submit-bulk-btn');
 
-// Pre-fill Coordinator Name
+// Update Header & Bottom Navigation based on auth state
+const headerNav = document.getElementById('header-nav');
+const bottomNav = document.getElementById('bottom-nav');
+if (user && token) {
+  if (headerNav) {
+    headerNav.innerHTML = `
+      <a href="menu.html">Menu</a>
+      <a href="orders.html">My Orders</a>
+      <a href="#" onclick="localStorage.removeItem('token'); localStorage.removeItem('user'); window.location.href='login.html'; return false;">Logout (${escapeHtml(user.name)})</a>
+    `;
+  }
+  if (bottomNav) {
+    bottomNav.innerHTML = `
+      <a href="menu.html"><i class="fa-solid fa-utensils"></i><span>Menu</span></a>
+      <a href="bulk-order.html" class="active"><i class="fa-solid fa-boxes-stacked"></i><span>Bulk</span></a>
+      <a href="orders.html"><i class="fa-solid fa-receipt"></i><span>Orders</span></a>
+      <a href="#" onclick="localStorage.removeItem('token'); localStorage.removeItem('user'); window.location.href='login.html'; return false;"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></a>
+    `;
+  }
+} else {
+  if (headerNav) {
+    headerNav.innerHTML = `
+      <a href="menu.html">Menu</a>
+      <a href="login.html" class="btn btn-secondary" style="padding: 0.3rem 0.8rem; font-size: 0.85rem; border-radius: 16px;">Login / Register</a>
+    `;
+  }
+}
+
+// Pre-fill Coordinator Name if user is logged in
 const contactNameInput = document.getElementById('contact-name');
-if (contactNameInput && user.name) {
+if (contactNameInput && user && user.name) {
   contactNameInput.value = user.name;
 }
 
@@ -79,8 +103,8 @@ function switchTab(tab) {
   }
 }
 
-tabBtnRequest.onclick = () => switchTab('request');
-tabBtnHistory.onclick = () => switchTab('history');
+if (tabBtnRequest) tabBtnRequest.onclick = () => switchTab('request');
+if (tabBtnHistory) tabBtnHistory.onclick = () => switchTab('history');
 
 // --- FETCH MENU ITEMS FOR BULK SELECTOR ---
 async function fetchMenuItems() {
@@ -90,11 +114,14 @@ async function fetchMenuItems() {
     allMenuItems = await res.json();
     renderBulkItems(allMenuItems);
   } catch (err) {
-    bulkItemsContainer.innerHTML = `<div style="text-align:center;color:red;grid-column:1/-1;">Error loading dishes: ${err.message}</div>`;
+    if (bulkItemsContainer) {
+      bulkItemsContainer.innerHTML = `<div style="text-align:center;color:red;grid-column:1/-1;">Error loading dishes: ${err.message}</div>`;
+    }
   }
 }
 
 function renderBulkItems(items) {
+  if (!bulkItemsContainer) return;
   bulkItemsContainer.innerHTML = '';
 
   if (items.length === 0) {
@@ -169,7 +196,6 @@ window.setItemQty = function(itemId, qty) {
   }
 
   updateSummary();
-  // Filter active search
   filterDishes();
 };
 
@@ -184,114 +210,145 @@ function updateSummary() {
     estimatedTotal += (item.quantity * item.price);
   });
 
-  selectedItemsCount.innerText = `${totalQty} units across ${keys.length} item(s)`;
-  estimatedTotalDisp.innerText = `₹${estimatedTotal.toFixed(2)}`;
+  if (selectedItemsCount) selectedItemsCount.innerText = `${totalQty} units across ${keys.length} item(s)`;
+  if (estimatedTotalDisp) estimatedTotalDisp.innerText = `₹${estimatedTotal.toFixed(2)}`;
 }
 
 // Filter dishes on search
-bulkItemSearch.addEventListener('input', (e) => {
-  filterDishes();
-});
+if (bulkItemSearch) {
+  bulkItemSearch.addEventListener('input', () => {
+    filterDishes();
+  });
+}
 
 function filterDishes() {
-  const q = (bulkItemSearch.value || '').toLowerCase().trim();
+  const q = (bulkItemSearch ? bulkItemSearch.value : '').toLowerCase().trim();
   const filtered = allMenuItems.filter(i => i.name.toLowerCase().includes(q));
   renderBulkItems(filtered);
 }
 
 // --- SUBMIT BULK ORDER FORM ---
-bulkOrderForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
+if (bulkOrderForm) {
+  bulkOrderForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
 
-  const selectedList = Object.values(selectedItems);
-  if (selectedList.length === 0) {
-    alert('Please select at least one menu item or specify your bulk quantities.');
-    return;
-  }
+    const selectedList = Object.values(selectedItems);
+    if (selectedList.length === 0) {
+      alert('Please select at least one menu item or specify your bulk quantities.');
+      return;
+    }
 
-  const eventName          = document.getElementById('event-name').value.trim();
-  const eventDate          = document.getElementById('event-date').value;
-  const eventTime          = document.getElementById('event-time').value.trim();
-  const headcount          = parseInt(document.getElementById('headcount').value, 10);
-  const deliveryLocation   = document.getElementById('delivery-location').value.trim();
-  const customRequirements = document.getElementById('custom-requirements').value.trim();
-  const contactName        = document.getElementById('contact-name').value.trim();
-  const contactPhone       = document.getElementById('contact-phone').value.trim();
+    const eventName          = document.getElementById('event-name').value.trim();
+    const eventDate          = document.getElementById('event-date').value;
+    const eventTime          = document.getElementById('event-time').value.trim();
+    const headcount          = parseInt(document.getElementById('headcount').value, 10);
+    const deliveryLocation   = document.getElementById('delivery-location').value.trim();
+    const customRequirements = document.getElementById('custom-requirements').value.trim();
+    const contactName        = document.getElementById('contact-name').value.trim();
+    const contactPhone       = document.getElementById('contact-phone').value.trim();
 
-  let estimatedTotal = 0;
-  selectedList.forEach(item => {
-    estimatedTotal += item.quantity * item.price;
-  });
-
-  submitBulkBtn.disabled = true;
-  submitBulkBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Submitting Request...';
-
-  try {
-    const res = await fetch(`${API_URL}/bulk-orders/create`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        event_name: eventName,
-        event_date: eventDate,
-        event_time: eventTime,
-        headcount,
-        items: selectedList,
-        custom_requirements: customRequirements,
-        contact_name: contactName,
-        contact_phone: contactPhone,
-        delivery_location: deliveryLocation,
-        estimated_total: estimatedTotal
-      })
+    let estimatedTotal = 0;
+    selectedList.forEach(item => {
+      estimatedTotal += item.quantity * item.price;
     });
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to submit bulk order request.');
+    submitBulkBtn.disabled = true;
+    submitBulkBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Submitting Request...';
 
-    alert('🎉 Bulk catering order submitted successfully! The canteen admin has been notified.');
-    
-    // Reset Form
-    bulkOrderForm.reset();
-    selectedItems = {};
-    updateSummary();
-    renderBulkItems(allMenuItems);
+    const reqHeaders = { 'Content-Type': 'application/json' };
+    if (token) {
+      reqHeaders['Authorization'] = `Bearer ${token}`;
+    }
 
-    // Switch to History Tab
-    switchTab('history');
-  } catch (err) {
-    alert('Submission failed: ' + err.message);
-  } finally {
-    submitBulkBtn.disabled = false;
-    submitBulkBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit Bulk Order Request';
-  }
-});
+    try {
+      const res = await fetch(`${API_URL}/bulk-orders/create`, {
+        method: 'POST',
+        headers: reqHeaders,
+        body: JSON.stringify({
+          event_name: eventName,
+          event_date: eventDate,
+          event_time: eventTime,
+          headcount,
+          items: selectedList,
+          custom_requirements: customRequirements,
+          contact_name: contactName,
+          contact_phone: contactPhone,
+          delivery_location: deliveryLocation,
+          estimated_total: estimatedTotal
+        })
+      });
 
-// --- FETCH & RENDER USER BULK ORDER HISTORY ---
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to submit bulk order request.');
+
+      // Save order ID for guest tracking
+      if (!token) {
+        const guestOrders = JSON.parse(localStorage.getItem('guest_bulk_orders') || '[]');
+        if (!guestOrders.includes(data.id)) {
+          guestOrders.unshift(data.id);
+          localStorage.setItem('guest_bulk_orders', JSON.stringify(guestOrders));
+        }
+      }
+
+      alert('🎉 Bulk catering order submitted successfully! The canteen admin will review and quote.');
+      
+      // Reset Form
+      bulkOrderForm.reset();
+      selectedItems = {};
+      updateSummary();
+      renderBulkItems(allMenuItems);
+
+      // Switch to History Tab
+      switchTab('history');
+    } catch (err) {
+      alert('Submission failed: ' + err.message);
+    } finally {
+      submitBulkBtn.disabled = false;
+      submitBulkBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit Bulk Order Request';
+    }
+  });
+}
+
+// --- FETCH & RENDER USER / GUEST BULK ORDER HISTORY ---
 async function fetchMyBulkOrders() {
   try {
-    const res = await fetch(`${API_URL}/bulk-orders/me`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
+    let res;
+    if (token) {
+      res = await fetch(`${API_URL}/bulk-orders/me`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+    } else {
+      const guestOrders = JSON.parse(localStorage.getItem('guest_bulk_orders') || '[]');
+      if (guestOrders.length === 0) {
+        myBulkOrders = [];
+        if (myBulkCount) myBulkCount.innerText = 0;
+        renderBulkHistory([]);
+        return;
+      }
+      res = await fetch(`${API_URL}/bulk-orders/guest?ids=${encodeURIComponent(guestOrders.join(','))}`);
+    }
+
     if (!res.ok) throw new Error('Failed to load your bulk orders');
     myBulkOrders = await res.json();
-    myBulkCount.innerText = myBulkOrders.length;
+    if (myBulkCount) myBulkCount.innerText = myBulkOrders.length;
     renderBulkHistory(myBulkOrders);
   } catch (err) {
-    bulkHistoryContainer.innerHTML = `<div style="text-align:center;color:red;">Error loading bulk orders: ${err.message}</div>`;
+    if (bulkHistoryContainer) {
+      bulkHistoryContainer.innerHTML = `<div style="text-align:center;color:red;">Error loading bulk orders: ${err.message}</div>`;
+    }
   }
 }
 
 function renderBulkHistory(orders) {
+  if (!bulkHistoryContainer) return;
   bulkHistoryContainer.innerHTML = '';
 
   if (orders.length === 0) {
     bulkHistoryContainer.innerHTML = `
       <div style="text-align:center;padding:3rem;color:var(--text-muted);" class="glass-panel">
         <i class="fa-solid fa-boxes-packing" style="font-size: 3rem; margin-bottom: 1rem; color: #ccc;"></i>
-        <h4 style="margin-bottom: 0.5rem;">No Bulk Orders Yet</h4>
-        <p>You have not placed any bulk catering requests. Click "New Request" to plan an order for your event.</p>
+        <h4 style="margin-bottom: 0.5rem;">No Bulk Orders Found</h4>
+        <p>You have not placed any bulk catering requests yet. Click "New Request" to plan an order for your event.</p>
       </div>`;
     return;
   }
@@ -372,8 +429,8 @@ window.viewBulkOrderDetails = function(orderId) {
   const order = myBulkOrders.find(o => o.id === orderId);
   if (!order) return;
 
-  modalEventTitle.innerText = order.event_name;
-  modalOrderId.innerText = `ID: ${order.id} | Status: ${order.status}`;
+  if (modalEventTitle) modalEventTitle.innerText = order.event_name;
+  if (modalOrderId) modalOrderId.innerText = `ID: ${order.id} | Status: ${order.status}`;
 
   const items = JSON.parse(order.items || '[]');
   const itemsHtml = items.map(i => `
@@ -383,49 +440,51 @@ window.viewBulkOrderDetails = function(orderId) {
     </div>
   `).join('');
 
-  modalContentBody.innerHTML = `
-    <div style="background: var(--bg-color); padding: 1rem; border-radius: 8px; font-size: 0.9rem;">
-      <div><strong>📅 Date & Time:</strong> ${new Date(order.event_date).toLocaleDateString()} at ${escapeHtml(order.event_time)}</div>
-      <div style="margin-top:0.3rem;"><strong>👥 Headcount:</strong> ${escapeHtml(order.headcount)} people</div>
-      <div style="margin-top:0.3rem;"><strong>📍 Location:</strong> ${escapeHtml(order.delivery_location)}</div>
-      <div style="margin-top:0.3rem;"><strong>👤 Coordinator:</strong> ${escapeHtml(order.contact_name)} (${escapeHtml(order.contact_phone)})</div>
-    </div>
+  if (modalContentBody) {
+    modalContentBody.innerHTML = `
+      <div style="background: var(--bg-color); padding: 1rem; border-radius: 8px; font-size: 0.9rem;">
+        <div><strong>📅 Date & Time:</strong> ${new Date(order.event_date).toLocaleDateString()} at ${escapeHtml(order.event_time)}</div>
+        <div style="margin-top:0.3rem;"><strong>👥 Headcount:</strong> ${escapeHtml(order.headcount)} people</div>
+        <div style="margin-top:0.3rem;"><strong>📍 Location:</strong> ${escapeHtml(order.delivery_location)}</div>
+        <div style="margin-top:0.3rem;"><strong>👤 Coordinator:</strong> ${escapeHtml(order.contact_name)} (${escapeHtml(order.contact_phone)})</div>
+      </div>
 
-    <div>
-      <h4 style="margin-bottom: 0.5rem; font-size: 1rem;"><i class="fa-solid fa-list-check"></i> Menu Breakdown</h4>
-      <div style="max-height: 180px; overflow-y: auto;">
-        ${itemsHtml}
+      <div>
+        <h4 style="margin-bottom: 0.5rem; font-size: 1rem;"><i class="fa-solid fa-list-check"></i> Menu Breakdown</h4>
+        <div style="max-height: 180px; overflow-y: auto;">
+          ${itemsHtml}
+        </div>
+        <div style="display: flex; justify-content: space-between; font-weight: bold; margin-top: 0.8rem; padding-top: 0.5rem; border-top: 2px solid var(--text-main);">
+          <span>Estimated Total:</span>
+          <span>₹${parseFloat(order.estimated_total).toFixed(2)}</span>
+        </div>
+        ${order.final_price ? `
+          <div style="display: flex; justify-content: space-between; font-weight: 800; color: var(--primary-color); margin-top: 0.4rem; font-size: 1.1rem;">
+            <span>Approved Quotation:</span>
+            <span>₹${parseFloat(order.final_price).toFixed(2)}</span>
+          </div>
+        ` : ''}
       </div>
-      <div style="display: flex; justify-content: space-between; font-weight: bold; margin-top: 0.8rem; padding-top: 0.5rem; border-top: 2px solid var(--text-main);">
-        <span>Estimated Total:</span>
-        <span>₹${parseFloat(order.estimated_total).toFixed(2)}</span>
-      </div>
-      ${order.final_price ? `
-        <div style="display: flex; justify-content: space-between; font-weight: 800; color: var(--primary-color); margin-top: 0.4rem; font-size: 1.1rem;">
-          <span>Approved Quotation:</span>
-          <span>₹${parseFloat(order.final_price).toFixed(2)}</span>
+
+      ${order.custom_requirements ? `
+        <div>
+          <h4 style="margin-bottom: 0.3rem; font-size: 0.95rem;"><i class="fa-solid fa-note-sticky"></i> Custom Requests</h4>
+          <div style="background: #fafafa; border: 1px solid #eee; padding: 0.8rem; border-radius: 6px; font-size: 0.9rem; color: #444;">
+            ${escapeHtml(order.custom_requirements)}
+          </div>
         </div>
       ` : ''}
-    </div>
 
-    ${order.custom_requirements ? `
-      <div>
-        <h4 style="margin-bottom: 0.3rem; font-size: 0.95rem;"><i class="fa-solid fa-note-sticky"></i> Custom Requests</h4>
-        <div style="background: #fafafa; border: 1px solid #eee; padding: 0.8rem; border-radius: 6px; font-size: 0.9rem; color: #444;">
-          ${escapeHtml(order.custom_requirements)}
+      ${order.admin_notes ? `
+        <div style="background: #fff8e1; border: 1px solid #f39c12; padding: 0.8rem; border-radius: 6px; font-size: 0.9rem;">
+          <strong style="color: #d35400;"><i class="fa-solid fa-bullhorn"></i> Note from Canteen Admin:</strong>
+          <p style="margin-top: 0.3rem; margin-bottom: 0;">${escapeHtml(order.admin_notes)}</p>
         </div>
-      </div>
-    ` : ''}
+      ` : ''}
+    `;
+  }
 
-    ${order.admin_notes ? `
-      <div style="background: #fff8e1; border: 1px solid #f39c12; padding: 0.8rem; border-radius: 6px; font-size: 0.9rem;">
-        <strong style="color: #d35400;"><i class="fa-solid fa-bullhorn"></i> Note from Canteen Admin:</strong>
-        <p style="margin-top: 0.3rem; margin-bottom: 0;">${escapeHtml(order.admin_notes)}</p>
-      </div>
-    ` : ''}
-  `;
-
-  bulkDetailsModal.classList.add('active');
+  if (bulkDetailsModal) bulkDetailsModal.classList.add('active');
 };
 
 if (closeBulkModal) {
@@ -448,7 +507,8 @@ function escapeHtml(str) {
 
 // --- Real-time Socket Updates ---
 socket.on('bulk_order_status_update', (data) => {
-  if (user && data.userId === user.id) {
+  const guestOrders = JSON.parse(localStorage.getItem('guest_bulk_orders') || '[]');
+  if ((user && data.userId === user.id) || guestOrders.includes(data.id)) {
     alert(`📢 Bulk Order Update: "${data.event_name}" is now marked as "${data.status}".`);
     fetchMyBulkOrders();
   }

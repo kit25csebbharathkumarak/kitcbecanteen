@@ -207,7 +207,7 @@
     <a href="contact.html" style="color: var(--text-muted); text-decoration: none; font-weight: 500;">Contact Us</a>
   </footer>
 
-  <nav class="bottom-nav">
+  <nav class="bottom-nav" id="bottom-nav">
     <a href="menu.html">
       <i class="fa-solid fa-utensils"></i>
       <span>Menu</span>
@@ -216,13 +216,9 @@
       <i class="fa-solid fa-boxes-stacked"></i>
       <span>Bulk Order</span>
     </a>
-    <a href="orders.html">
-      <i class="fa-solid fa-receipt"></i>
-      <span>Orders</span>
-    </a>
-    <a href="#" onclick="localStorage.removeItem('token'); localStorage.removeItem('user'); window.location.href='login.html'; return false;">
-      <i class="fa-solid fa-right-from-bracket"></i>
-      <span>Logout</span>
+    <a href="login.html" id="bottom-auth-link">
+      <i class="fa-solid fa-right-to-bracket"></i>
+      <span>Login</span>
     </a>
   </nav>
 
