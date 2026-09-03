@@ -461,7 +461,7 @@ app.post('/api/auth/reset-password', (req, res) => {
 });
 
 // --- MENU ITEM ROUTES ---
-app.get('/api/items', authenticateToken, (req, res) => {
+app.get('/api/items', (req, res) => {
   db.all('SELECT * FROM items ORDER BY id ASC', [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
