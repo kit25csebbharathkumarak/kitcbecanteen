@@ -8,7 +8,7 @@ if (!token || !user || user.role !== 'admin') {
 const socket = io({
   auth: { token }
 });
-// ─── DOM ───────────────────────────────────────────────────────────────────────
+// --- DOM ---
 const ordersBoard              = document.getElementById('orders-board');
 const recentlyScannedContainer = document.getElementById('recently-scanned-container');
 const scannedOrderDetails      = document.getElementById('scanned-order-details');
@@ -18,7 +18,7 @@ let orders          = [];
 let lastScannedId   = null;
 let searchQuery     = '';
 
-// ─── QR Scanner ───────────────────────────────────────────────────────────────
+// --- QR Scanner ---
 const html5QrcodeScanner = new Html5QrcodeScanner(
   'reader',
   { fps: 10, qrbox: { width: 250, height: 250 } },
@@ -110,7 +110,7 @@ function renderScannedOrderDetails(order) {
   renderOrders();
 }
 
-// ─── Order Status Update ───────────────────────────────────────────────────────
+// --- Order Status Update ---
 async function updateOrderStatus(id, status) {
   try {
     await fetch(`${API_URL}/orders/${id}/status`, {
@@ -127,7 +127,7 @@ async function updateOrderStatus(id, status) {
 }
 window.updateOrderStatus = updateOrderStatus;
 
-// ─── Confirm Payment (Admin manual verification) ───────────────────────────────
+// --- Confirm Payment ---Admin manual verification) ---
 async function confirmPayment(orderId) {
   const txnId = prompt(
     `Enter UPI Transaction / UTR number for order ${orderId} (optional — leave blank to auto-generate):`,
@@ -160,7 +160,7 @@ async function confirmPayment(orderId) {
 }
 window.confirmPayment = confirmPayment;
 
-// ─── Fetch & Render All Orders ────────────────────────────────────────────────
+// --- Fetch --- Render All Orders ---
 async function fetchOrders() {
   try {
     const res = await fetch(`${API_URL}/orders`, {
@@ -236,14 +236,14 @@ function renderOrders() {
   });
 }
 
-// ─── Socket Events ────────────────────────────────────────────────────────────
+// --- Socket Events ---
 socket.on('new_order', () => fetchOrders());
 socket.on('order_status_update', () => fetchOrders());
 socket.on('payment_confirmed', () => fetchOrders());
 
 socket.on('menu_updated', () => { /* menu change doesn't affect admin orders view */ });
 
-// ─── Clear Delivered Orders ───────────────────────────────────────────────────
+// --- Clear Delivered Orders ---
 async function clearDeliveredOrders() {
   if (!confirm('Delete all delivered orders? This cannot be undone.')) return;
   try {
@@ -260,7 +260,7 @@ async function clearDeliveredOrders() {
   }
 }
 
-// ─── Logout ───────────────────────────────────────────────────────────────────
+// --- Logout ---
 const nav = document.getElementById('admin-nav');
 if (nav) {
   const logoutBtn   = document.createElement('a');
@@ -276,7 +276,7 @@ if (nav) {
   nav.appendChild(logoutBtn);
 }
 
-// ─── Init ─────────────────────────────────────────────────────────────────────
+// --- Init ---
 fetchOrders();
 
 document.getElementById('clear-delivered-btn').addEventListener('click', clearDeliveredOrders);
@@ -286,7 +286,7 @@ orderSearchInput.addEventListener('input', (e) => {
   renderOrders();
 });
 
-// ─── Shop Status Toggle ───────────────────────────────────────────────────────
+// --- Shop Status Toggle ---
 const shopStatusToggle = document.getElementById('shop-status-toggle');
 if (shopStatusToggle) {
   // Fetch initial status

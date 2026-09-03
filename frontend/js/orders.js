@@ -11,7 +11,7 @@ const socket = io({
 });
 let orders   = [];
 
-// ─── URL Params for Payment Callback ─────────────────────────────────────────────
+// --- URL Params for Payment Callback ---
 const urlParams = new URLSearchParams(window.location.search);
 if (urlParams.get('payment') === 'success') {
   alert('Payment successful! Your order has been placed.');
@@ -22,7 +22,7 @@ if (urlParams.get('error')) {
   window.history.replaceState({}, document.title, window.location.pathname);
 }
 
-// ─── DOM Elements ──────────────────────────────────────────────────────────────
+// --- DOM Elements ---
 const userOrdersBoard = document.getElementById('user-orders-board');
 const qrModal         = document.getElementById('qr-modal');
 const closeModalBtn   = document.getElementById('close-modal');
@@ -50,7 +50,7 @@ window.showPickupQR = function(orderId) {
   qrModal.classList.add('active');
 };
 
-// ─── Fetch & Render My Orders ──────────────────────────────────────────────────
+// --- Fetch --- Render My Orders ---
 async function fetchMyOrders() {
   try {
     const res = await fetch(`${API_URL}/orders/me`, {
@@ -131,12 +131,12 @@ function renderOrders() {
   });
 }
 
-// ─── Close Modal ──────────────────────────────────────────────────────────────
+// --- Close Modal ---
 if (closeModalBtn) {
   closeModalBtn.onclick = () => qrModal.classList.remove('active');
 }
 
-// ─── Nav Logout ───────────────────────────────────────────────────────────────
+// --- Nav Logout ---
 const nav = document.querySelector('nav');
 if (nav) {
   const logoutBtn   = document.createElement('a');
@@ -151,9 +151,9 @@ if (nav) {
   nav.appendChild(logoutBtn);
 }
 
-// ─── Socket Updates ───────────────────────────────────────────────────────────
+// --- Socket Updates ---
 socket.on('order_status_update', () => fetchMyOrders());
 socket.on('payment_confirmed', () => fetchMyOrders());
 
-// ─── Init ─────────────────────────────────────────────────────────────────────
+// --- Init ---
 fetchMyOrders();

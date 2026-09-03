@@ -48,7 +48,7 @@ const db = {
   close() { return pool.end(); }
 };
 
-// ─── DEFAULT SEED DATA ────────────────────────────────────────────────────────
+// --- DEFAULT SEED DATA ---
 const defaultItems = [
   ['Empty Biryani',   20,  'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=500&q=80', 50],
   ['Chicken Biryani', 110, 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?auto=format&fit=crop&w=500&q=80', 30],
@@ -57,7 +57,7 @@ const defaultItems = [
   ['Chicken Rice',    110, 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?auto=format&fit=crop&w=500&q=80', 25],
 ];
 
-// ─── DATABASE INITIALISATION ──────────────────────────────────────────────────
+// --- DATABASE INITIALISATION ---
 const initializeDatabase = async () => {
   // Users table
   await pool.query(`
@@ -157,7 +157,7 @@ const initializeDatabase = async () => {
     console.log('Admin seeded — email: admin@canteen.com  password: admin123');
   }
 
-  console.log('✅ Database initialised successfully.');
+  console.log('Database initialised successfully.');
 };
 
 initializeDatabase().catch((error) => {

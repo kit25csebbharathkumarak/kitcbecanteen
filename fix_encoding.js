@@ -12,9 +12,9 @@ function fixFiles(dir) {
       
       let newContent = content
         .replace(/â‚¹/g, '₹')
-        .replace(/Ã—/g, '×')
-        .replace(/ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦/g, '✅')
-        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â /g, '—')
+        .replace(/×/g, '×')
+        .replace(/✅/g, '✅')
+        .replace(/-/g, '—')
         .replace(/₹,1/g, '₹');
 
       if (content !== newContent) {
