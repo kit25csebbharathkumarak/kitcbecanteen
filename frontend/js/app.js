@@ -432,79 +432,11 @@ async function processCheckout(total) {
     // Cart is preserved here in case they cancel/go back. 
     // It will be cleared upon successful payment.
 
-    if (data.paymentSessionId) {
-      if (typeof ZPayments !== 'undefined') {
-        const configRes = await fetch(`${API_URL}/zoho-config`);
-        const configData = await configRes.json();
-
-        let config = {
-          "account_id": configData.account_id,
-          "domain": "IN",
-          "otherOptions": {
-            "api_key": configData.api_key
-          }
-        };
-
-        const zp = new ZPayments(config);
-        
-        // Wait for webhook to confirm via socket or navigate when the modal is closed
-        socket.once('payment_confirmed', (msg) => {
-           if (msg.orderId === data.orderId) {
-               window.location.href = 'orders.html?payment=success';
-           }
-        });
-
-        let options = {
-          "amount": total.toString(),
-          "currency_code": "INR",
-          "payments_session_id": data.paymentSessionId,
-          "description": "Order " + data.orderId
-        };
-
-        let widgetPromise;
-        if (typeof zp.open === 'function') {
-           widgetPromise = zp.open(options);
-        } else if (typeof zp.requestPaymentMethod === 'function') {
-           widgetPromise = zp.requestPaymentMethod(options);
-        } else if (typeof zp.checkout === 'function') {
-           widgetPromise = zp.checkout(options);
-        } else {
-           alert('Checkout Error: Unable to find payment method on Zoho widget. Methods available: ' + Object.keys(zp).join(', '));
-           return;
-        }
-
-        try {
-           let response = await widgetPromise;
-           if (response) {
-               // Fallback: forcefully verify with backend in case webhook is delayed or fails
-               try {
-                   await fetch(`${API_URL}/orders/verify-zoho-payment`, {
-                       method: 'POST',
-                       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                       body: JSON.stringify({ orderId: data.orderId, paymentSessionId: data.paymentSessionId })
-                   });
-               } catch(e) { console.error('Fallback verify failed:', e); }
-
-               window.location.href = 'orders.html?payment=success';
-           }
-        } catch (widgetErr) {
-           if (widgetErr && widgetErr.code !== 'widget_closed') {
-               console.error("Widget Error:", widgetErr);
-               alert("Payment failed: " + (widgetErr.message || JSON.stringify(widgetErr)));
-           }
-           // Reload to clear Zoho widget injected state if it fails or gets closed
-           window.location.reload();
-        }
-      } else {
-        alert('Payment initiated. Please check your Zoho Payments App.');
-      }
-      
-      checkoutBtn.disabled  = false;
-      checkoutBtn.innerText = 'Proceed to Pay';
+    if (data.payment_url) {
+      window.location.href = data.payment_url;
     } else {
-      alert('Failed to obtain Payment Session ID.');
-      checkoutBtn.disabled  = false;
-      checkoutBtn.innerText = 'Proceed to Pay';
+      alert('Failed to obtain Payment URL from Gateway. The order has been saved and is pending payment.');
+      window.location.href = 'orders.html';
     }
 
   } catch (err) {

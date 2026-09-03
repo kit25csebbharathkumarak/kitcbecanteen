@@ -606,39 +606,34 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
     const txnRef = orderId;
     const itemsStr = JSON.stringify(sanitizedItems);
 
-    // 2. Obtain Zoho Payment Session
-    let paymentSessionId;
-    try {
-      const accessToken = await getZohoAccessToken();
-      const zohoRes = await axios.post(
-        `https://payments.zoho.in/api/v1/paymentsessions?account_id=${process.env.ZOHO_ACCOUNT_ID}`,
-        {
-          amount: serverTotal,
-          currency: "INR"
-        },
-        {
-          headers: {
-            'Authorization': `Zoho-oauthtoken ${accessToken}`,
-            'Content-Type': 'application/json'
-          },
-          timeout: 10000
-        }
-      );
-      paymentSessionId = zohoRes.data?.payments_session?.payments_session_id || 'dummy_zoho_session_' + Date.now();
-    } catch (zohoErr) {
-      console.error('Zoho Payments error during session creation:', zohoErr.response?.data || zohoErr.message);
-      await client.query('ROLLBACK');
-      return res.status(500).json({ error: 'Failed to initiate payment with Zoho Payments.' });
-    }
-
-    // 3. Insert order row into DB
+    // 2. Insert order row into DB with Pending Payment status
     await client.query(
-      "INSERT INTO orders (id, items, total, status, txn_ref, user_id, zoho_payment_session_id) VALUES ($1, $2, $3, 'Pending Payment', $4, $5, $6)",
-      [orderId, itemsStr, serverTotal, txnRef, userId, paymentSessionId]
+      "INSERT INTO orders (id, items, total, status, txn_ref, user_id) VALUES ($1, $2, $3, 'Pending Payment', $4, $5)",
+      [orderId, itemsStr, serverTotal, txnRef, userId]
     );
 
-    // Commit transaction
+    // Commit transaction immediately to secure the order and stock deductions
     await client.query('COMMIT');
+
+    // 3. Initiate payment via BS Solutions UPI Gateway
+    let paymentUrl = null;
+    try {
+      const gatewayBaseUrl = process.env.UPI_GATEWAY_URL.replace(/\/+$/, '');
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      
+      const paymentReq = await axios.post(`${gatewayBaseUrl}/api/gateway/payment/create`, {
+        clientCode: process.env.UPI_GATEWAY_KEY,
+        developerOrderId: orderId,
+        amount: serverTotal,
+        callbackUrl: `${frontendUrl}/api/payment-callback`
+      }, { timeout: 10000 });
+      
+      paymentUrl = paymentReq.data?.payment_url;
+    } catch (gatewayErr) {
+      console.error('Gateway Error:', gatewayErr.response?.data || gatewayErr.message);
+      // We do not rollback because the order is already secured in DB as Pending Payment.
+      // The user can try paying again from the orders page later.
+    }
 
     // 4. Update in-memory activeCarts
     if (activeCarts[userId]) {
@@ -656,7 +651,7 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
     }
 
     io.emit('menu_updated');
-    return res.json({ success: true, orderId, paymentSessionId, amount: serverTotal });
+    return res.json({ success: true, orderId, payment_url: paymentUrl, amount: serverTotal });
 
   } catch (err) {
     await client.query('ROLLBACK');
