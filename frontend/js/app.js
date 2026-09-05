@@ -302,48 +302,90 @@ function renderMenu(items) {
       const safePrice = escapeHtml(item.price);
       const safeStock = escapeHtml(item.stock);
       const safeImg = encodeURI(item.image || '');
+      const cartItem = cart[item.id];
+      const inCartQty = cartItem ? cartItem.quantity : 0;
+
+      let actionHtml = '';
+      if (inCartQty > 0) {
+        actionHtml = `
+          <div class="item-stepper">
+            <button type="button" onclick="updateQuantity(${escapeHtml(item.id)}, -1)">-</button>
+            <span class="stepper-count">${inCartQty}</span>
+            <button type="button" onclick="updateQuantity(${escapeHtml(item.id)}, 1)">+</button>
+          </div>`;
+      } else {
+        actionHtml = `
+          <button class="btn btn-primary btn-add"
+            onclick="addToCart(${escapeHtml(item.id)})"
+            ${item.stock <= 0 ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>
+            <i class="fa-solid fa-plus"></i> ${item.stock > 0 ? 'Add' : 'Sold Out'}
+          </button>`;
+      }
 
       div.innerHTML = `
-        <div class="item-img-wrap" style="position:relative;">
-          <img src="${safeImg}" alt="${safeName}">
+        <div class="item-img-wrap">
+          <img src="${safeImg}" alt="${safeName}" loading="lazy" onerror="this.src='parotta.png';">
         </div>
         <div class="item-info">
           <h3>${safeName}</h3>
           <div class="item-price">₹${safePrice}</div>
-          <div class="item-stock" style="font-size:0.85rem;color:${item.stock > 0 ? 'var(--text-muted)' : '#ff5252'};font-weight:600;margin-bottom:1rem;">
+          <div class="item-stock" style="color:${item.stock > 0 ? 'var(--text-muted)' : '#ff5252'};">
             ${item.stock > 0 ? `In Stock: ${safeStock}` : 'Out of Stock'}
           </div>
         </div>
-        <button class="btn btn-secondary btn-add"
-          onclick="addToCart(${escapeHtml(item.id)})"
-          ${item.stock <= 0 ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>
-          ${item.stock > 0 ? 'Add to Cart' : 'Sold Out'}
-        </button>
+        ${actionHtml}
       `;
       menuGrid.appendChild(div);
     });
   } else {
-    // In-place update for existing items to prevent layout shifts/flickering
+    // In-place update for existing items
     filtered.forEach(item => {
       if (!item.available) return;
       const div = menuGrid.querySelector(`.menu-item[data-item-id="${item.id}"]`);
       if (div) {
         const stockDiv = div.querySelector('.item-stock');
-        const btn = div.querySelector('.btn-add');
+        if (stockDiv) {
+          stockDiv.style.color = item.stock > 0 ? 'var(--text-muted)' : '#ff5252';
+          stockDiv.innerText = item.stock > 0 ? `In Stock: ${item.stock}` : 'Out of Stock';
+        }
         
-        stockDiv.style.color = item.stock > 0 ? 'var(--text-muted)' : '#ff5252';
-        stockDiv.innerText = item.stock > 0 ? `In Stock: ${item.stock}` : 'Out of Stock';
-        
-        if (item.stock <= 0) {
-          btn.setAttribute('disabled', 'true');
-          btn.style.opacity = '0.5';
-          btn.style.cursor = 'not-allowed';
-          btn.innerText = 'Sold Out';
+        const cartItem = cart[item.id];
+        const inCartQty = cartItem ? cartItem.quantity : 0;
+        const existingStepper = div.querySelector('.item-stepper');
+        const existingBtn = div.querySelector('.btn-add');
+
+        if (inCartQty > 0) {
+          if (existingStepper) {
+            existingStepper.querySelector('.stepper-count').innerText = inCartQty;
+          } else if (existingBtn) {
+            existingBtn.outerHTML = `
+              <div class="item-stepper">
+                <button type="button" onclick="updateQuantity(${escapeHtml(item.id)}, -1)">-</button>
+                <span class="stepper-count">${inCartQty}</span>
+                <button type="button" onclick="updateQuantity(${escapeHtml(item.id)}, 1)">+</button>
+              </div>`;
+          }
         } else {
-          btn.removeAttribute('disabled');
-          btn.style.opacity = '1';
-          btn.style.cursor = 'pointer';
-          btn.innerText = 'Add to Cart';
+          if (existingStepper) {
+            existingStepper.outerHTML = `
+              <button class="btn btn-primary btn-add"
+                onclick="addToCart(${escapeHtml(item.id)})"
+                ${item.stock <= 0 ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>
+                <i class="fa-solid fa-plus"></i> ${item.stock > 0 ? 'Add' : 'Sold Out'}
+              </button>`;
+          } else if (existingBtn) {
+            if (item.stock <= 0) {
+              existingBtn.setAttribute('disabled', 'true');
+              existingBtn.style.opacity = '0.5';
+              existingBtn.style.cursor = 'not-allowed';
+              existingBtn.innerHTML = 'Sold Out';
+            } else {
+              existingBtn.removeAttribute('disabled');
+              existingBtn.style.opacity = '1';
+              existingBtn.style.cursor = 'pointer';
+              existingBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Add';
+            }
+          }
         }
       }
     });
@@ -616,17 +658,22 @@ const floatingCartBtn = document.getElementById('floating-cart-btn');
 const cartPanel = document.getElementById('cart-panel');
 const cartOverlay = document.getElementById('cart-overlay');
 const closeCartBtn = document.getElementById('close-cart-btn');
+const mobileCartBar = document.getElementById('mobile-cart-bar');
 
-if (floatingCartBtn && cartPanel && cartOverlay && closeCartBtn) {
-  floatingCartBtn.onclick = () => {
-    cartPanel.classList.add('open');
-    cartOverlay.classList.add('open');
-  };
+if (cartPanel && cartOverlay) {
+  if (floatingCartBtn) {
+    floatingCartBtn.onclick = () => {
+      cartPanel.classList.add('open');
+      cartOverlay.classList.add('open');
+    };
+  }
   
-  closeCartBtn.onclick = () => {
-    cartPanel.classList.remove('open');
-    cartOverlay.classList.remove('open');
-  };
+  if (closeCartBtn) {
+    closeCartBtn.onclick = () => {
+      cartPanel.classList.remove('open');
+      cartOverlay.classList.remove('open');
+    };
+  }
   
   cartOverlay.onclick = () => {
     cartPanel.classList.remove('open');
@@ -635,11 +682,35 @@ if (floatingCartBtn && cartPanel && cartOverlay && closeCartBtn) {
 }
 
 function updateCartCount() {
+  const items = Object.values(cart);
+  const totalItems = items.reduce((acc, item) => acc + item.quantity, 0);
+  const totalPrice = items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+
   const countBtn = document.getElementById('floating-cart-count');
   if (countBtn) {
-    const totalItems = Object.values(cart).reduce((acc, item) => acc + item.quantity, 0);
     countBtn.innerText = totalItems;
+    if (totalItems > 0) {
+      countBtn.style.display = 'inline-block';
+    } else {
+      countBtn.style.display = 'none';
+    }
   }
+
+  // Update floating sticky mobile cart bar
+  if (mobileCartBar) {
+    if (totalItems > 0) {
+      const itemsText = document.getElementById('mobile-cart-items-text');
+      const totalText = document.getElementById('mobile-cart-total-text');
+      if (itemsText) itemsText.innerText = `${totalItems} ${totalItems === 1 ? 'ITEM' : 'ITEMS'}`;
+      if (totalText) totalText.innerText = `₹${totalPrice}`;
+      mobileCartBar.style.display = 'flex';
+    } else {
+      mobileCartBar.style.display = 'none';
+    }
+  }
+
+  // Sync menu card steppers with cart changes
+  renderMenu();
 }
 
 // --- Init ---

@@ -108,7 +108,30 @@
     </div>
   </div>
 
-  <script src="js/admin-bulk.js?v=6"></script>
+  <nav class="bottom-nav">
+    <a href="admin.html">
+      <i class="fa-solid fa-gauge-high"></i>
+      <span>Orders</span>
+    </a>
+    <a href="admin-bulk.html" class="active">
+      <i class="fa-solid fa-boxes-stacked"></i>
+      <span>Bulk</span>
+    </a>
+    <a href="admin-menu.html">
+      <i class="fa-solid fa-utensils"></i>
+      <span>Menu</span>
+    </a>
+    <a href="admin-stats.html">
+      <i class="fa-solid fa-chart-line"></i>
+      <span>Stats</span>
+    </a>
+    <a href="#" onclick="localStorage.removeItem('token'); localStorage.removeItem('user'); window.location.href='login.html'; return false;">
+      <i class="fa-solid fa-right-from-bracket"></i>
+      <span>Logout</span>
+    </a>
+  </nav>
+
+  <script src="js/admin-bulk.js?v=8"></script>
 </body>
 
 </html>

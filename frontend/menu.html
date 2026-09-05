@@ -58,6 +58,7 @@
 
     <aside>
       <div class="cart-panel glass-panel" id="cart-panel">
+        <div class="drawer-handle"></div>
         <span class="close-cart-btn" id="close-cart-btn">&times;</span>
         <h3 class="cart-header"><i class="fa-solid fa-basket-shopping"></i> Your Cart</h3>
         <div class="cart-items" id="cart-items">
@@ -72,6 +73,18 @@
         </div>
       </div>
     </aside>
+  </div>
+
+  <!-- Mobile Floating Sticky Cart Summary Bar -->
+  <div id="mobile-cart-bar" class="mobile-cart-bar" style="display:none;" onclick="document.getElementById('cart-panel').classList.add('open'); document.getElementById('cart-overlay').classList.add('open');">
+    <div class="mobile-cart-bar-left">
+      <span class="mobile-cart-bar-items" id="mobile-cart-items-text">0 Items</span>
+      <span class="mobile-cart-bar-total" id="mobile-cart-total-text">₹0</span>
+    </div>
+    <div class="mobile-cart-bar-right">
+      <span>View Cart</span>
+      <i class="fa-solid fa-arrow-right"></i>
+    </div>
   </div>
 
   <script src="https://static.zohocdn.com/zpay/zpay-js/v1/zpayments.js"></script>
@@ -93,7 +106,7 @@
       <i class="fa-solid fa-utensils"></i>
       <span>Menu</span>
     </a>
-    <a href="#" onclick="document.getElementById('cart-panel').classList.add('open'); document.getElementById('cart-overlay').classList.add('show'); document.getElementById('cart-overlay').classList.add('open'); return false;" style="position:relative;">
+    <a href="#" onclick="document.getElementById('cart-panel').classList.add('open'); document.getElementById('cart-overlay').classList.add('open'); return false;" style="position:relative;">
       <i class="fa-solid fa-cart-shopping"></i>
       <span>Cart</span>
       <span id="floating-cart-count" class="cart-badge" style="position:absolute; top:-5px; right:15px; background:var(--primary-color); color:white; border-radius:50%; padding:2px 6px; font-size:0.7rem; font-weight:bold;">0</span>
@@ -108,7 +121,7 @@
     </a>
   </nav>
 
-  <script src="js/app.js"></script>
+  <script src="js/app.js?v=8"></script>
 </body>
 
 </html>
