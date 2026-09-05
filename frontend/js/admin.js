@@ -233,14 +233,7 @@ function renderOrders() {
     // Action buttons per status
     let actionBtns = '';
     const safeOrderId = escapeHtml(order.id);
-    if (order.status === 'Pending Payment') {
-      actionBtns = `
-        <button class="btn btn-primary"
-          style="margin-top:0.6rem;display:block;font-size:0.8rem;padding:0.4rem 0.8rem;background:#2ecc71;border-color:#2ecc71;"
-          onclick="confirmPayment('${safeOrderId}')">
-          <i class="fa-solid fa-check"></i> Confirm Payment
-        </button>`;
-    } else if (order.status === 'Pending') {
+    if (order.status === 'Pending') {
       actionBtns = `
         <div style="display:flex;flex-direction:column;gap:0.4rem;margin-top:0.5rem;">
           <button class="btn btn-primary"

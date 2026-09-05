@@ -980,7 +980,7 @@ app.get('/api/orders/status/:id', authenticateToken, (req, res) => {
   });
 });
 
-// Get orders for logged-in student (returns all recent orders, ensuring pending and paid are visible)
+// Get orders for logged-in student (only returns paid/completed orders; pending payment/failed excluded)
 app.get('/api/orders/me', authenticateToken, (req, res) => {
   db.all(
     'SELECT orders.*, users.name AS user_name FROM orders JOIN users ON orders.user_id = users.id WHERE user_id = ? ORDER BY created_at DESC',
@@ -988,7 +988,7 @@ app.get('/api/orders/me', authenticateToken, (req, res) => {
     async (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
       const syncedRows = await Promise.all(rows.map(row => syncOrderIfPending(row)));
-      res.json(syncedRows);
+      res.json(syncedRows.filter(r => r.status !== 'Pending Payment' && r.status !== 'Failed'));
     }
   );
 });

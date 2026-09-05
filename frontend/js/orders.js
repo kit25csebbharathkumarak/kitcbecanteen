@@ -187,7 +187,11 @@ function showToast({ title, message, type = 'food-ready', icon = 'fa-bell-concie
 function renderMyOrders() {
   userOrdersBoard.innerHTML = '';
 
-  if (orders.length === 0) {
+  const activeOrders = orders.filter(
+    o => o.status !== 'Pending Payment' && o.status !== 'Failed'
+  );
+
+  if (activeOrders.length === 0) {
     userOrdersBoard.innerHTML = `
       <div style="text-align:center;padding:3rem;color:var(--text-muted);">
         <img src="logo.png" alt="Logo" style="height:80px; margin-bottom:1.5rem; filter: grayscale(0.2); opacity: 0.8; display:block; margin-left:auto; margin-right:auto;">
@@ -196,7 +200,7 @@ function renderMyOrders() {
     return;
   }
 
-  orders.forEach(order => {
+  activeOrders.forEach(order => {
     const items    = JSON.parse(order.items);
     const statusLc = (order.status || '').toLowerCase().replace(/\s+/g, '-');
     const safeOrderId = escapeHtml(order.id);
@@ -234,12 +238,7 @@ function renderMyOrders() {
     div.appendChild(headerRow);
 
     // Call-to-action & Hints
-    if (order.status === 'Pending Payment') {
-      const note = document.createElement('div');
-      note.style.cssText = 'color:var(--text-muted);font-size:0.9rem;margin-top:0.5rem;';
-      note.innerHTML = `<i class="fa-solid fa-clock"></i> Waiting for payment confirmation.`;
-      div.appendChild(note);
-    } else if (isFoodReady) {
+    if (isFoodReady) {
       // High-visibility prompt when food is ready to collect
       const readyBanner = document.createElement('div');
       readyBanner.style.cssText = 'background: #fff8e1; border: 2px solid #f39c12; padding: 0.8rem 1.2rem; border-radius: 8px; width: 100%; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.8rem;';
