@@ -209,6 +209,8 @@ function renderOrders() {
   ordersBoard.innerHTML = '';
 
   const filtered = orders.filter(o =>
+    o.status !== 'Pending Payment' &&
+    o.status !== 'Failed' &&
     o.id.toLowerCase().includes(searchQuery.toLowerCase())
   );
 

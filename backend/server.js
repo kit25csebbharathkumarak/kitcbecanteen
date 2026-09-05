@@ -68,59 +68,38 @@ io.on('connection', (socket) => {
     const { itemId, change } = data;
     if (!itemId || typeof change !== 'number' || change === 0) return;
 
-    if (change > 0) {
-      // Atomic conditional decrement: only decrement if available stock >= change
-      db.run('UPDATE items SET stock = stock - ? WHERE id = ? AND stock >= ?', [change, itemId, change], (err, info) => {
-        if (err) return socket.emit('cart_error', 'Database error');
-        if (!info || info.changes === 0) {
-          return socket.emit('cart_error', 'Insufficient stock available.');
+    db.get('SELECT id, name, stock, available FROM items WHERE id = ?', [itemId], (err, item) => {
+      if (err || !item) return socket.emit('cart_error', 'Item not found');
+      if (!item.available) return socket.emit('cart_error', `${item.name} is currently unavailable`);
+
+      const currentInCart = (activeCarts[userId] && activeCarts[userId][itemId]) || 0;
+      const targetQty = currentInCart + change;
+
+      if (change > 0) {
+        if (targetQty > item.stock) {
+          return socket.emit('cart_error', `Cannot add more. Only ${item.stock} available in stock.`);
         }
-        activeCarts[userId][itemId] = (activeCarts[userId][itemId] || 0) + change;
-        io.emit('menu_updated');
+        activeCarts[userId][itemId] = targetQty;
         socket.emit('cart_updated', activeCarts[userId]);
-      });
-    } else if (change < 0) {
-      const currentInCart = activeCarts[userId][itemId] || 0;
-      const removeAmt = Math.min(Math.abs(change), currentInCart);
-      if (removeAmt > 0) {
-        db.run('UPDATE items SET stock = stock + ? WHERE id = ?', [removeAmt, itemId], (err) => {
-          if (!err) {
-            activeCarts[userId][itemId] -= removeAmt;
-            if (activeCarts[userId][itemId] <= 0) delete activeCarts[userId][itemId];
-            io.emit('menu_updated');
-            socket.emit('cart_updated', activeCarts[userId]);
-          }
-        });
+      } else if (change < 0) {
+        if (targetQty <= 0) {
+          delete activeCarts[userId][itemId];
+        } else {
+          activeCarts[userId][itemId] = targetQty;
+        }
+        socket.emit('cart_updated', activeCarts[userId]);
       }
-    }
+    });
   });
 
   socket.on('disconnect', () => {
     activeConnections[userId]--;
-    
-    if (activeConnections[userId] === 0) {
+    if (activeConnections[userId] <= 0) {
+      delete activeConnections[userId];
       disconnectTimeouts[userId] = setTimeout(() => {
-        const userCart = activeCarts[userId] || {};
-        const itemIds = Object.keys(userCart);
-        if (itemIds.length > 0) {
-          const updatePromises = itemIds.map(itemId => {
-            return new Promise(resolve => {
-              const qty = userCart[itemId];
-              if (qty > 0) {
-                db.run('UPDATE items SET stock = stock + ? WHERE id = ?', [qty, itemId], resolve);
-              } else {
-                resolve();
-              }
-            });
-          });
-          Promise.all(updatePromises).then(() => {
-            io.emit('menu_updated');
-          });
-        }
         delete activeCarts[userId];
-        delete activeConnections[userId];
         delete disconnectTimeouts[userId];
-      }, 5000);
+      }, 30000);
     }
   });
 });
@@ -574,11 +553,11 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // 1. Fetch item prices and details with row-level locks
+    // 1. Fetch item prices and details
     const itemIds = items.map(i => i.id);
     const placeholders = itemIds.map((_, i) => `$${i + 1}`).join(',');
     const itemRes = await client.query(
-      `SELECT id, name, price, image, stock FROM items WHERE id IN (${placeholders}) FOR UPDATE`,
+      `SELECT id, name, price, image, stock, available FROM items WHERE id IN (${placeholders})`,
       itemIds
     );
     const rows = itemRes.rows;
@@ -586,12 +565,17 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
     let serverTotal = 0;
     const sanitizedItems = [];
 
-    // Calculate serverTotal and validate quantities
+    // Calculate serverTotal and validate quantities against stock
     for (const item of items) {
       const dbItem = rows.find(r => r.id === item.id);
       if (!dbItem) {
         await client.query('ROLLBACK');
         return res.status(400).json({ error: `Item not found: ${item.id}` });
+      }
+
+      if (!dbItem.available) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: `${dbItem.name} is currently unavailable.` });
       }
 
       const requestedQty = parseInt(item.quantity, 10);
@@ -600,20 +584,9 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
         return res.status(400).json({ error: `Invalid quantity for ${dbItem.name}` });
       }
 
-      // If user had items reserved in cart socket, that was already decremented from stock
-      const reservedInCart = (activeCarts[userId] && activeCarts[userId][item.id]) || 0;
-      const additionalRequired = requestedQty - reservedInCart;
-
-      if (additionalRequired > 0) {
-        // Decrement atomically from remaining DB stock
-        const decrRes = await client.query(
-          'UPDATE items SET stock = stock - $1 WHERE id = $2 AND stock >= $1',
-          [additionalRequired, item.id]
-        );
-        if (decrRes.rowCount === 0) {
-          await client.query('ROLLBACK');
-          return res.status(400).json({ error: `Not enough stock available for ${dbItem.name}` });
-        }
+      if (dbItem.stock < requestedQty) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: `Not enough stock available for ${dbItem.name}. Only ${dbItem.stock} in stock.` });
       }
 
       serverTotal += Number(dbItem.price) * requestedQty;
@@ -673,7 +646,6 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
         paymentUrl = paymentReq.data?.payment_url || null;
       } catch (gatewayErr) {
         console.error('UPI Gateway Error:', gatewayErr.response?.data || gatewayErr.message);
-        // Fallback session so student can proceed
         paymentSessionId = 'upi_session_' + orderId;
       }
     }
@@ -682,7 +654,7 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
       paymentSessionId = 'session_' + orderId;
     }
 
-    // 3. Insert order row into DB
+    // 3. Insert order row into DB with Pending Payment status
     await client.query(
       "INSERT INTO orders (id, items, total, status, txn_ref, user_id, zoho_payment_session_id) VALUES ($1, $2, $3, 'Pending Payment', $4, $5, $6)",
       [orderId, itemsStr, serverTotal, txnRef, userId, paymentSessionId]
@@ -691,32 +663,10 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
     // Commit transaction
     await client.query('COMMIT');
 
-    // 4. Update in-memory activeCarts
+    // 4. Clear in-memory activeCart for user
     if (activeCarts[userId]) {
-      sanitizedItems.forEach(item => {
-        if (activeCarts[userId][item.id]) {
-          activeCarts[userId][item.id] -= item.quantity;
-          if (activeCarts[userId][item.id] <= 0) {
-            delete activeCarts[userId][item.id];
-          }
-        }
-      });
-      if (Object.keys(activeCarts[userId]).length === 0) {
-        delete activeCarts[userId];
-      }
+      delete activeCarts[userId];
     }
-
-    // Broadcast new order to Admin Dashboard immediately
-    io.emit('new_order', {
-      id: orderId,
-      items: itemsStr,
-      total: serverTotal,
-      status: 'Pending Payment',
-      user_id: userId,
-      user_name: req.user.name,
-      created_at: new Date()
-    });
-    io.emit('menu_updated');
 
     return res.json({
       success: true,
@@ -809,83 +759,83 @@ app.post('/api/orders/zoho-webhook', (req, res) => {
     }
 
     const recordedTxnId = txnId || `ZOHO_${Date.now()}`;
-
-    db.run(
-      "UPDATE orders SET status = 'Pending', txn_id = ?, paid_at = CURRENT_TIMESTAMP WHERE id = ?",
-      [recordedTxnId, order.id],
-      (updateErr) => {
-        if (updateErr) {
-          console.error('[Zoho Webhook] DB Update error:', updateErr.message);
-          return res.status(500).json({ error: 'DB Error' });
-        }
-
-        // Record into transactions table for audit and idempotency
-        db.run(
-          'INSERT INTO transactions (txn_id, order_id, status, amount) VALUES (?, ?, ?, ?) ON CONFLICT (txn_id) DO NOTHING',
-          [recordedTxnId, order.id, 'SUCCESS', order.total]
-        );
-
-        io.emit('payment_confirmed', { orderId: order.id, txnId: recordedTxnId });
-        io.emit('new_order', { ...order, status: 'Pending', txn_id: recordedTxnId });
-        io.emit('menu_updated');
-
-        console.log(`[Zoho Webhook] Order ${order.id} confirmed -  txnId: ${recordedTxnId}`);
-        return res.json({ success: true, orderId: order.id });
+    confirmOrderInDb(order.id, recordedTxnId, (confirmErr) => {
+      if (confirmErr) {
+        console.error('[Zoho Webhook] DB confirm error:', confirmErr.message);
+        return res.status(500).json({ error: 'DB Error' });
       }
-    );
+      return res.json({ success: true, orderId: order.id });
+    });
   });
 });
 
-// Helper: confirm a paid order and record transaction
+// Helper: confirm a paid order, decrease item stock, and record transaction
 function confirmOrderInDb(orderId, txnId, callback) {
   const resolvedTxnId = (txnId && String(txnId).trim()) ? String(txnId).trim() : `TXN_${Date.now()}`;
 
-  db.get('SELECT * FROM orders WHERE id = ?', [orderId], (err, order) => {
-    if (err || !order) {
-      if (callback) callback(err || new Error('Order not found'));
-      return;
-    }
-
-    if (order.status !== 'Pending Payment') {
-      if (callback) callback(null, order);
-      return;
-    }
-
-    db.run(
-      "UPDATE orders SET status = 'Pending', txn_id = ?, paid_at = CURRENT_TIMESTAMP WHERE id = ?",
-      [resolvedTxnId, orderId],
-      (updateErr) => {
-        if (updateErr) {
-          if (callback) callback(updateErr);
-          return;
-        }
-
-        // Record in transactions table
-        db.run(
-          'INSERT INTO transactions (txn_id, order_id, status, amount) VALUES (?, ?, ?, ?) ON CONFLICT (txn_id) DO NOTHING',
-          [resolvedTxnId, orderId, 'SUCCESS', order.total],
-          () => {}
-        );
-
-        order.status = 'Pending';
-        order.txn_id = resolvedTxnId;
-
-        // Clean activeCart if user exists
-        if (order.user_id && activeCarts[order.user_id]) {
-          delete activeCarts[order.user_id];
-        }
-
-        // Broadcast to all connected clients in real-time
-        io.emit('payment_confirmed', { orderId, txnId: resolvedTxnId, userId: order.user_id });
-        io.emit('new_order', { ...order, status: 'Pending', txn_id: resolvedTxnId });
-        io.emit('order_status_update', { id: orderId, status: 'Pending', userId: order.user_id });
-        io.emit('menu_updated');
-
-        console.log(`[Order Confirmed] Order ${orderId} confirmed — txnId: ${resolvedTxnId}`);
-        if (callback) callback(null, order);
+  db.get(
+    'SELECT orders.*, users.name AS user_name FROM orders JOIN users ON orders.user_id = users.id WHERE orders.id = ?',
+    [orderId],
+    (err, order) => {
+      if (err || !order) {
+        if (callback) callback(err || new Error('Order not found'));
+        return;
       }
-    );
-  });
+
+      if (order.status !== 'Pending Payment') {
+        if (callback) callback(null, order);
+        return;
+      }
+
+      // Stock decreases after payment completion
+      try {
+        const orderItems = JSON.parse(order.items);
+        orderItems.forEach(item => {
+          const qty = parseInt(item.quantity, 10) || 0;
+          if (qty > 0 && item.id) {
+            db.run('UPDATE items SET stock = GREATEST(0, stock - ?) WHERE id = ?', [qty, item.id]);
+          }
+        });
+      } catch (parseErr) {
+        console.error('Error parsing items for stock decrement:', parseErr);
+      }
+
+      db.run(
+        "UPDATE orders SET status = 'Pending', txn_id = ?, paid_at = CURRENT_TIMESTAMP WHERE id = ?",
+        [resolvedTxnId, orderId],
+        (updateErr) => {
+          if (updateErr) {
+            if (callback) callback(updateErr);
+            return;
+          }
+
+          // Record in transactions table
+          db.run(
+            'INSERT INTO transactions (txn_id, order_id, status, amount) VALUES (?, ?, ?, ?) ON CONFLICT (txn_id) DO NOTHING',
+            [resolvedTxnId, orderId, 'SUCCESS', order.total],
+            () => {}
+          );
+
+          order.status = 'Pending';
+          order.txn_id = resolvedTxnId;
+
+          // Clean activeCart if user exists
+          if (order.user_id && activeCarts[order.user_id]) {
+            delete activeCarts[order.user_id];
+          }
+
+          // Broadcast to all connected clients in real-time
+          io.emit('payment_confirmed', { orderId, txnId: resolvedTxnId, userId: order.user_id });
+          io.emit('new_order', { ...order, status: 'Pending', txn_id: resolvedTxnId });
+          io.emit('order_status_update', { id: orderId, status: 'Pending', userId: order.user_id });
+          io.emit('menu_updated');
+
+          console.log(`[Order Confirmed] Order ${orderId} confirmed — txnId: ${resolvedTxnId}`);
+          if (callback) callback(null, order);
+        }
+      );
+    }
+  );
 }
 
 // Fallback Verification Endpoint (Zoho & Frontend Payment Verification)
@@ -941,15 +891,6 @@ const handlePaymentCallback = async (req, res) => {
         });
       } else {
         db.run("UPDATE orders SET status = 'Failed' WHERE id = ?", [order.id], () => {
-          if (order.status === 'Pending Payment') {
-            try {
-              const items = JSON.parse(order.items);
-              items.forEach(item => {
-                db.run('UPDATE items SET stock = stock + ? WHERE id = ?', [item.quantity, item.id]);
-              });
-              io.emit('menu_updated');
-            } catch (e) {}
-          }
           io.emit('order_status_update', { id: order.id, status: 'Failed' });
           res.redirect('/orders.html?error=payment_failed');
         });
@@ -1052,15 +993,15 @@ app.get('/api/orders/me', authenticateToken, (req, res) => {
   );
 });
 
-// Get all orders (Admin dashboard - displays pending, paid, ready, and delivered orders)
+// Get all orders (Admin dashboard - displays paid, ready, and delivered orders; pending payment/failed excluded)
 app.get('/api/orders', requireAdmin, (req, res) => {
   db.all(
-    'SELECT orders.*, users.name AS user_name FROM orders JOIN users ON orders.user_id = users.id ORDER BY created_at DESC',
+    "SELECT orders.*, users.name AS user_name FROM orders JOIN users ON orders.user_id = users.id WHERE orders.status NOT IN ('Pending Payment', 'Failed') ORDER BY created_at DESC",
     [],
     async (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
       const syncedRows = await Promise.all(rows.map(row => syncOrderIfPending(row)));
-      res.json(syncedRows);
+      res.json(syncedRows.filter(r => r.status !== 'Pending Payment' && r.status !== 'Failed'));
     }
   );
 });
